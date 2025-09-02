@@ -34,10 +34,15 @@
 
 5. **Truy cập server:**
 
-   - Mở trình duyệt và truy cập: [http://localhost:8080/ping](http://localhost:8080/ping)
+   - Mở trình duyệt và truy cập: [http://localhost:8081/ping](http://localhost:8080/ping)
    - Nếu thành công sẽ nhận được:
      ```json
      {"message": "pong"}
+     ```
+   - Hoặc [http://localhost:8081](http://localhost:8081)
+   - Nếu thành công:
+      ```raw
+     Survey server is running
      ```
 
 ## Cấu trúc thư mục
