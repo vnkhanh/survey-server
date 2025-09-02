@@ -41,7 +41,7 @@
      ```
 
 ## Cấu trúc thư mục
-
+Một số thư mục không hiển thị ở trên là do còn rỗng nên không push được
 - `cmd/`: Chứa file main khởi động server
 - `config/`: Cấu hình ứng dụng
 - `controllers/`: Xử lý logic các API
