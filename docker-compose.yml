@@ -5,10 +5,37 @@ services:
     build: .
     container_name: survey-server
     ports:
-      - "8080:8080"
+      - "8081:8080"
     env_file:
       - .env
-    command: ./main
+    environment:
+      JWT_SECRET: supersecretkey_1234567
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: 123456
+      DB_NAME: survey_db
+    depends_on:
+      - db
+    networks:
+      - survey-network
+
+  db:
+    image: postgres:15
+    container_name: survey-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: survey_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - survey-network
 
 volumes:
-  go_cache:
+  pgdata:
+
+networks:
+  survey-network:
