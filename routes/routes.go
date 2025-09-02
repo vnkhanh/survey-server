@@ -10,4 +10,6 @@ func SetupRoutes(r *gin.Engine) {
 			"message": "pong",
 		})
 	})
+
+	// Thêm các route khác ở đây
 }
