@@ -19,5 +19,18 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			auth.POST("/register", controllers.Register)
 		}
+		protected := api.Group("/")
+		protected.Use(middleware.AuthJWT())
+		{
+			protected.GET("/me", controllers.Me)
+		}
+
+		admin := protected.Group("/admin")
+		admin.Use(middleware.RequireAdmin())
+		{
+			admin.GET("/only", func(c *gin.Context) {
+				c.JSON(200, gin.H{"ok": true})
+			})
+		}
 	}
 }
