@@ -42,8 +42,8 @@ func AuthJWT() gin.HandlerFunc {
 		}
 
 		// Inject vào context
-		c.Set("user", user)
-		c.Set("userPublic", gin.H{
+		c.Set(CtxUser, user)
+        c.Set(CtxUserPublic, gin.H{
 			"id":       user.ID,
 			"ten":      user.Ten,
 			"email":    user.Email,
