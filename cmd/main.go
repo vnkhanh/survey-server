@@ -1,10 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
-	"sort"
 
 	"github.com/gin-gonic/gin"
 	"github.com/vnkhanh/survey-server/config"
@@ -12,15 +10,6 @@ import (
 )
 
 func main() {
-	// Debug: In toàn bộ biến môi trường khi container start
-	envs := os.Environ()
-	sort.Strings(envs) // sắp xếp cho dễ đọc
-	fmt.Println("====== ENVIRONMENT VARIABLES ======")
-	for _, e := range envs {
-		fmt.Println(e)
-	}
-	fmt.Println("===================================")
-
 	// Kết nối DB + AutoMigrate
 	config.ConnectDB()
 

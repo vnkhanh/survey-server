@@ -2,6 +2,7 @@ package routes
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/vnkhanh/survey-server/controllers"
 )
 
 func SetupRoutes(r *gin.Engine) {
@@ -10,6 +11,11 @@ func SetupRoutes(r *gin.Engine) {
 			"message": "pong",
 		})
 	})
+	r.GET("/health", controllers.HealthCheck)
 
-	// Thêm các route khác ở đây
+	r.Group("/api")
+	{
+		// Thêm các route khác ở đây
+
+	}
 }
