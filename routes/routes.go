@@ -13,9 +13,11 @@ func SetupRoutes(r *gin.Engine) {
 	})
 	r.GET("/health", controllers.HealthCheck)
 
-	r.Group("/api")
+	api := r.Group("/api")
 	{
-		// Thêm các route khác ở đây
-
+		auth := api.Group("/auth")
+		{
+			auth.POST("/register", controllers.Register)
+		}
 	}
 }
