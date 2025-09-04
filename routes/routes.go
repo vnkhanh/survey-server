@@ -3,6 +3,7 @@ package routes
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/vnkhanh/survey-server/controllers"
+	"github.com/vnkhanh/survey-server/middleware"
 )
 
 func SetupRoutes(r *gin.Engine) {
@@ -18,6 +19,7 @@ func SetupRoutes(r *gin.Engine) {
 		auth := api.Group("/auth")
 		{
 			auth.POST("/register", controllers.Register)
+			auth.POST("/login", controllers.Login)
 		}
 		protected := api.Group("/")
 		protected.Use(middleware.AuthJWT())
