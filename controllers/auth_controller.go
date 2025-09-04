@@ -57,3 +57,7 @@ func Register(c *gin.Context) {
         },
     })
 }
+
+func Me(c *gin.Context) {
+	c.JSON(http.StatusOK, c.MustGet("userPublic"))
+}
