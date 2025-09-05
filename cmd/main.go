@@ -8,8 +8,6 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/vnkhanh/survey-server/config"
-	"github.com/vnkhanh/survey-server/controllers"
-	"github.com/vnkhanh/survey-server/middleware"
 	"github.com/vnkhanh/survey-server/routes"
 )
 
@@ -28,12 +26,6 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
-	api := r.Group("/api")
-	{
-		api.POST("/auth/login", controllers.Login)
-		api.POST("/auth/register", controllers.Register)
-		api.GET("/auth/me", middleware.AuthJWT(), controllers.Me)
-	}
 
 	// Route test server
 	r.GET("/", func(c *gin.Context) {
