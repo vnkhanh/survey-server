@@ -3,9 +3,13 @@ package main
 import (
 	"log"
 	"os"
+	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/vnkhanh/survey-server/config"
+	"github.com/vnkhanh/survey-server/controllers"
+	"github.com/vnkhanh/survey-server/middleware"
 	"github.com/vnkhanh/survey-server/routes"
 )
 
@@ -15,6 +19,21 @@ func main() {
 
 	// Tạo instance router
 	r := gin.Default()
+
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:5173"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
+	api := r.Group("/api")
+	{
+		api.POST("/auth/login", controllers.Login)
+		api.POST("/auth/register", controllers.Register)
+		api.GET("/auth/me", middleware.AuthJWT(), controllers.Me)
+	}
 
 	// Route test server
 	r.GET("/", func(c *gin.Context) {
