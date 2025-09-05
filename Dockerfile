@@ -32,4 +32,4 @@ EXPOSE 8080
 
 # Entry point: wait-for-it chỉ chờ DB nếu hostname là 'db'
 # Khi deploy, DB_HOST sẽ là Managed DB, wait-for-it sẽ timeout 0 và chạy thẳng
-CMD ["./wait-for-it.sh", "db:5432", "--", "./server"]
+ENTRYPOINT ["./wait-for-it.sh", "${DB_HOST:-db}", "${DB_PORT:-5432}", "--", "./server"]
