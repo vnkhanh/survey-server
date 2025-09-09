@@ -1,68 +1,20 @@
 package controllers
 
 import (
-    "net/http"
+	"context"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-    "github.com/gin-gonic/gin"
-    "github.com/vnkhanh/survey-server/config"
+	"github.com/gin-gonic/gin"
+	"github.com/vnkhanh/survey-server/config"
 	"github.com/vnkhanh/survey-server/middleware"
-    "github.com/vnkhanh/survey-server/models"
-    "github.com/vnkhanh/survey-server/utils"
+	"github.com/vnkhanh/survey-server/models"
+	"github.com/vnkhanh/survey-server/services"
+	"github.com/vnkhanh/survey-server/utils"
+	"google.golang.org/api/idtoken"
 )
-
-type DangKyReq struct {
-    Ten     string `json:"ten" binding:"required,min=1"`
-    Email   string `json:"email" binding:"required,email"`
-    MatKhau string `json:"mat_khau" binding:"required,min=6"`
-}
-
-func Register(c *gin.Context) {
-    var req DangKyReq
-    if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(http.StatusUnprocessableEntity, gin.H{"message": err.Error()})
-        return
-    }
-
-	email := strings.TrimSpace(strings.ToLower(req.Email))
-
-    var count int64
-    config.DB.Model(&models.NguoiDung{}).Where("email = ?", email).Count(&count)
-    if count > 0 {
-        c.JSON(http.StatusConflict, gin.H{"message": "Email đã tồn tại"})
-        return
-    }
-
-    hash, err := utils.HashPassword(req.MatKhau)
-    if err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể mã hóa mật khẩu"})
-        return
-    }
-
-    nd := models.NguoiDung{
-        Ten:     req.Ten,
-        Email:   email,
-        MatKhau: hash,
-        VaiTro:  false,
-    }
-
-    if err := config.DB.Create(&nd).Error; err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể tạo tài khoản"})
-        return
-    }
-
-    c.JSON(http.StatusCreated, gin.H{
-        "user": gin.H{
-            "id":       nd.ID,
-            "ten":      nd.Ten,
-            "email":    nd.Email,
-            "vai_tro":  nd.VaiTro,
-            "ngay_tao": nd.NgayTao,
-        },
-    })
-}
 
 func Me(c *gin.Context) {
 	c.JSON(http.StatusOK, c.MustGet(middleware.CtxUserPublic))
@@ -112,17 +64,69 @@ func Login(c *gin.Context) {
 	}
 
 	exp := time.Now().Add(24 * time.Hour)
-	
+
 	c.JSON(http.StatusOK, gin.H{
-		"token": token,
+		"token":      token,
 		"expires_at": exp,
-        "role": role,
+		"role":       role,
 		"user": gin.H{
 			"id":       u.ID,
 			"ten":      u.Ten,
 			"email":    u.Email,
 			"vai_tro":  u.VaiTro,
 			"ngay_tao": u.NgayTao,
+		},
+	})
+}
+
+type GoogleTokenRequest struct {
+	IDToken string `json:"id_token" binding:"required"`
+}
+
+func GoogleLoginHandler(c *gin.Context) {
+	var req GoogleTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Thiếu id_token"})
+		return
+	}
+
+	// Xác minh id_token với Google
+	payload, err := idtoken.Validate(context.Background(), req.IDToken, services.GoogleClientID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"message": "Token Google không hợp lệ",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Lấy thông tin user từ payload
+	email, _ := payload.Claims["email"].(string)
+	name, _ := payload.Claims["name"].(string)
+
+	// Tìm user trong DB hoặc tạo mới
+	var user models.NguoiDung
+	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		user = models.NguoiDung{
+			Ten:     name,
+			Email:   email,
+			VaiTro:  false,
+			NgayTao: time.Now(),
+		}
+		config.DB.Create(&user)
+	}
+
+	// Sinh JWT của hệ thống
+	token, _ := utils.GenerateToken(strconv.FormatUint(uint64(user.ID), 10), "user")
+
+	c.JSON(http.StatusOK, gin.H{
+		"token": token,
+		"user": gin.H{
+			"id":       user.ID,
+			"ten":      user.Ten,
+			"email":    user.Email,
+			"vai_tro":  user.VaiTro,
+			"ngay_tao": user.NgayTao,
 		},
 	})
 }

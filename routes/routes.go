@@ -18,8 +18,8 @@ func SetupRoutes(r *gin.Engine) {
 	{
 		auth := api.Group("/auth")
 		{
-			auth.POST("/register", controllers.Register)
 			auth.POST("/login", controllers.Login)
+			auth.POST("/google/login", controllers.GoogleLoginHandler)
 		}
 		protected := api.Group("/")
 		protected.Use(middleware.AuthJWT())
