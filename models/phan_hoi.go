@@ -3,11 +3,15 @@ package models
 import "time"
 
 type PhanHoi struct {
-	ID          uint        `gorm:"primaryKey;autoIncrement" json:"id"`
-	KhaoSatID   uint        `json:"khao_sat_id"`
-	KhaoSat     KhaoSat     `gorm:"foreignKey:KhaoSatID;constraint:OnDelete:CASCADE" json:"khao_sat"`
-	NguoiDungID *uint       `json:"nguoi_dung_id"`
-	NguoiDung   *NguoiDung  `gorm:"foreignKey:NguoiDungID" json:"nguoi_dung"`
-	NgayGui     time.Time   `gorm:"autoCreateTime" json:"ngay_gui"`
-	CauTraLois  []CauTraLoi `gorm:"foreignKey:PhanHoiID" json:"cau_tra_loi"`
+	ID          uint      `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	KhaoSatID   uint      `gorm:"column:khao_sat_id;not null" json:"khao_sat_id"`
+	NguoiDungID *uint     `gorm:"column:nguoi_dung_id" json:"nguoi_dung_id"`
+	NgayGui     time.Time `gorm:"column:ngay_gui;autoCreateTime" json:"ngay_gui"`
+
+	// Quan hệ
+	CauTraLois []CauTraLoi `gorm:"foreignKey:PhanHoiID" json:"-"`
+}
+
+func (PhanHoi) TableName() string {
+	return "phan_hoi"
 }
