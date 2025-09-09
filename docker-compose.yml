@@ -15,6 +15,7 @@ services:
       DB_PASSWORD: 123456
       DB_NAME: survey_db
       JWT_SECRET: supersecretkey_1234567
+      GOOGLE_CLIENT_ID: 232923029113-4qmipgl9dlonv1p6t7i0vbgu2l7j2cpn.apps.googleusercontent.com
     depends_on:
       - db
     networks:
