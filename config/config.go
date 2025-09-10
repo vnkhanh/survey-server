@@ -53,6 +53,8 @@ func ConnectDB() {
 		&models.CauTraLoi{},
 		&models.LuaChon{},
 		&models.PhanHoi{},
+		&models.Room{},
+		&models.RoomNguoiThamGia{},
 	)
 	if err != nil {
 		log.Fatalf("failed to migrate: %v", err)
