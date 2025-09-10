@@ -7,6 +7,8 @@ type CauHoi struct {
 	LoaiCauHoi string `gorm:"column:loai_cau_hoi;size:50;not null" json:"loai_cau_hoi"`
 	ThuTu      int    `gorm:"column:thu_tu;default:0" json:"thu_tu"`
 
+	PropsJSON string `gorm:"column:props_json;type:text" json:"-"`
+
 	// Quan hệ
 	LuaChons   []LuaChon   `gorm:"foreignKey:CauHoiID" json:"-"`
 	CauTraLois []CauTraLoi `gorm:"foreignKey:CauHoiID" json:"-"`
