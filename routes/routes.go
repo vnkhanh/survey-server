@@ -34,5 +34,32 @@ func SetupRoutes(r *gin.Engine) {
 				c.JSON(200, gin.H{"ok": true})
 			})
 		}
+		forms := api.Group("/forms")
+		forms.Use(middleware.AuthJWT())
+		{
+			// BE-01..04
+			forms.POST("", controllers.CreateForm)
+			forms.GET("/:id", controllers.GetFormDetail)
+			forms.PUT("/:id", middleware.CheckFormOwner(), controllers.UpdateForm)
+			forms.DELETE("/:id", middleware.CheckFormOwner(), controllers.DeleteForm)
+
+			// (tuỳ chọn) Archive/Restore
+			forms.PUT("/:id/archive", middleware.CheckFormOwner(), controllers.ArchiveForm)
+			forms.PUT("/:id/restore", middleware.CheckFormOwner(), controllers.RestoreForm)
+
+			// BE-05: thêm câu hỏi
+			forms.POST("/:id/questions", middleware.CheckFormOwner(), controllers.AddQuestion)
+
+			// BE-08: reorder
+			forms.PUT("/:id/questions/reorder", middleware.CheckFormOwner(), controllers.ReorderQuestions)
+
+			// BE-09..10: settings
+			forms.PUT("/:id/settings", middleware.CheckFormOwner(), controllers.UpdateFormSettings)
+			forms.GET("/:id/settings", controllers.GetFormSettings)
+		}
+
+		api.PUT("/questions/:id", middleware.AuthJWT(), controllers.UpdateQuestion)    // BE-06
+    	api.DELETE("/questions/:id", middleware.AuthJWT(), controllers.DeleteQuestion) // BE-07
+
 	}
 }
