@@ -56,10 +56,24 @@ func SetupRoutes(r *gin.Engine) {
 			// BE-09..10: settings
 			forms.PUT("/:id/settings", middleware.CheckFormOwner(), controllers.UpdateFormSettings)
 			forms.GET("/:id/settings", controllers.GetFormSettings)
+
+			// BE-11: themes form
+			forms.PUT("/:id/theme", middleware.CheckFormOwner(), controllers.UpdateFormTheme)
+			forms.GET("/:id/theme", controllers.GetFormTheme)
 		}
 
 		api.PUT("/questions/:id", middleware.AuthJWT(), controllers.UpdateQuestion)    // BE-06
-    	api.DELETE("/questions/:id", middleware.AuthJWT(), controllers.DeleteQuestion) // BE-07
+		api.DELETE("/questions/:id", middleware.AuthJWT(), controllers.DeleteQuestion) // BE-07
 
+		// BE-12: room
+		rooms := api.Group("/rooms")
+		rooms.Use(middleware.AuthJWT())
+		{
+			rooms.POST("", controllers.CreateRoom)
+			rooms.GET("/:id", controllers.GetRoomDetail)
+			rooms.PUT("/:id", middleware.CheckRoomOwner(), controllers.UpdateRoom)
+			rooms.DELETE("/:id", middleware.CheckRoomOwner(), controllers.DeleteRoom)
+			rooms.POST("/:id/password", middleware.CheckRoomOwner(), controllers.SetRoomPassword)
+		}
 	}
 }

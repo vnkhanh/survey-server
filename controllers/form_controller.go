@@ -296,3 +296,71 @@ func GetFormSettings(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"settings": settings})
 }
+
+/* ========== BE-11: Cập nhật giao diện (theme) ========== */
+
+type updateThemeReq struct {
+	Theme json.RawMessage `json:"theme" binding:"required"`
+}
+
+// PUT /api/forms/:id/theme
+func UpdateFormTheme(c *gin.Context) {
+	f := c.MustGet("formObj").(models.KhaoSat)
+
+	var req updateThemeReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"message": "Payload không hợp lệ",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	if len(req.Theme) == 0 || !json.Valid(req.Theme) {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"message": "theme không phải JSON hợp lệ",
+		})
+		return
+	}
+
+	if err := config.DB.Model(&models.KhaoSat{}).
+		Where("id = ?", f.ID).
+		Update("theme_json", string(req.Theme)).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Lưu theme thất bại",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "updated"})
+}
+
+/* ========== BE-11b: Lấy theme của form ========== */
+
+// GET /api/forms/:id/theme
+func GetFormTheme(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "ID không hợp lệ"})
+		return
+	}
+
+	var f models.KhaoSat
+	if e := config.DB.Select("id, theme_json").
+		Where("id = ? AND trang_thai <> 'deleted'", id).
+		First(&f).Error; e != nil {
+		if e == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Form không tồn tại"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể lấy theme"})
+		return
+	}
+
+	var theme interface{}
+	if f.ThemeJSON != "" {
+		_ = json.Unmarshal([]byte(f.ThemeJSON), &theme)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"theme": theme})
+}
