@@ -10,7 +10,11 @@ type KhaoSat struct {
 	NguoiTaoID  uint       `gorm:"column:nguoi_tao_id" json:"nguoi_tao_id"`
 	NgayTao     time.Time  `gorm:"column:ngay_tao;autoCreateTime" json:"ngay_tao"`
 	NgayKetThuc *time.Time `gorm:"column:ngay_ket_thuc" json:"ngay_ket_thuc"`
+	TemplateID  *uint      `gorm:"column:template_id" json:"template_id"`
 
+	SettingsJSON string `gorm:"column:settings_json;type:text" json:"-"`
+	ThemeJSON    string `gorm:"column:theme_json;type:text" json:"-"`
+	
 	// Quan hệ
 	CauHois  []CauHoi  `gorm:"foreignKey:KhaoSatID" json:"-"`
 	PhanHois []PhanHoi `gorm:"foreignKey:KhaoSatID" json:"-"`
