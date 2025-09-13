@@ -9,8 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"github.com/vnkhanh/survey-server/config"
+	"github.com/vnkhanh/survey-server/utils"
 	"github.com/vnkhanh/survey-server/middleware"
+	"github.com/vnkhanh/survey-server/config"
 	"github.com/vnkhanh/survey-server/models"
 )
 
@@ -25,7 +26,6 @@ type createFormReq struct {
 }
 
 func CreateForm(c *gin.Context) {
-	u := c.MustGet(middleware.CtxUser).(models.NguoiDung)
 
 	var req createFormReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -33,7 +33,7 @@ func CreateForm(c *gin.Context) {
 		return
 	}
 
-	// Validate JSON fields (nếu truyền lên)
+	// Validate JSON fields
 	if len(req.Settings) > 0 && !json.Valid(req.Settings) {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "settings không phải JSON hợp lệ"})
 		return
@@ -43,11 +43,18 @@ func CreateForm(c *gin.Context) {
 		return
 	}
 
+	var ownerID *uint
+	if v, ok := c.Get(middleware.CtxUser); ok {
+		if u, ok2 := v.(models.NguoiDung); ok2 {
+			ownerID = &u.ID
+		}
+	}
+	
 	form := models.KhaoSat{
 		TieuDe:     req.Title,
 		MoTa:       req.Description,
-		NguoiTaoID: u.ID,
-		TrangThai:  "active", // dùng ngay
+		NguoiTaoID: ownerID,
+		TrangThai:  "active",
 		TemplateID: req.TemplateID,
 	}
 	if len(req.Settings) > 0 {
@@ -57,21 +64,48 @@ func CreateForm(c *gin.Context) {
 		form.ThemeJSON = string(req.Theme)
 	}
 
+	var rawToken string
+	var err error
+	if ownerID == nil {
+		rawToken, err = utils.GenerateEditToken()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể sinh edit token"})
+			return
+		}
+		if form.EditTokenHash, err = utils.HashEditToken(rawToken); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể băm edit token"})
+			return
+		}
+	}
+
 	if err := config.DB.Create(&form).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể tạo form"})
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	resp := gin.H{
 		"id":          form.ID,
 		"title":       form.TieuDe,
 		"description": form.MoTa,
 		"owner_id":    form.NguoiTaoID,
 		"created_at":  form.NgayTao,
-	})
+	}
+	if ownerID == nil && rawToken != "" {
+		resp["edit_token"] = rawToken
+	}
+	c.JSON(http.StatusCreated, resp)
 }
 
 /* ========== BE-02: Xem chi tiết form ========== */
+
+type QuestionDTO struct {
+    ID      uint             `json:"id"`
+    Type    string           `json:"type"`
+    Content string           `json:"content"`
+    Order   int              `json:"order"`
+    Props   interface{}      `json:"props,omitempty"`
+    Options []models.LuaChon `json:"options,omitempty"`
+}
 
 func GetFormDetail(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
@@ -104,13 +138,24 @@ func GetFormDetail(c *gin.Context) {
 		_ = json.Unmarshal([]byte(form.ThemeJSON), &theme)
 	}
 
+	out := make([]QuestionDTO, 0, len(form.CauHois))
+	for _, q := range form.CauHois {
+    	var props interface{}
+    	if q.PropsJSON != "" {
+        	_ = json.Unmarshal([]byte(q.PropsJSON), &props)
+    	}
+    	out = append(out, QuestionDTO{
+        	ID: q.ID, Type: q.LoaiCauHoi, Content: q.NoiDung, Order: q.ThuTu,
+        	Props: props, Options: q.LuaChons,
+    	})
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"id":          form.ID,
 		"title":       form.TieuDe,
 		"description": form.MoTa,
 		"settings":    settings,
 		"theme":       theme,
-		"questions":   form.CauHois,
+		"questions":   out,
 	})
 }
 
