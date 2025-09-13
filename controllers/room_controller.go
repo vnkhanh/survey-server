@@ -189,6 +189,7 @@ func UpdateRoom(c *gin.Context) {
 		return
 	}
 
+	// update từng field nếu có
 	if req.TenRoom != nil {
 		room.TenRoom = *req.TenRoom
 	}
@@ -196,6 +197,16 @@ func UpdateRoom(c *gin.Context) {
 		room.MoTa = req.MoTa
 	}
 	if req.KhaoSatID != nil {
+		// kiểm tra khảo sát tồn tại và hợp lệ
+		var ks models.KhaoSat
+		if err := config.DB.First(&ks, *req.KhaoSatID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Khảo sát không tồn tại"})
+			return
+		}
+		if ks.TrangThai != "published" && ks.TrangThai != "active" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Chỉ có thể liên kết room với khảo sát đã publish hoặc đang active"})
+			return
+		}
 		room.KhaoSatID = *req.KhaoSatID
 	}
 
@@ -204,7 +215,10 @@ func UpdateRoom(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Cập nhật room thành công", "data": room})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Cập nhật room thành công",
+		"data":    room,
+	})
 }
 
 // BE-16: xoá room
