@@ -41,3 +41,30 @@ func CheckFormOwner() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// CheckRoomOwner: nạp room vào context & xác thực sở hữu
+func CheckRoomOwner() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		u := c.MustGet(CtxUser).(models.NguoiDung)
+
+		id, err := strconv.Atoi(c.Param("id"))
+		if err != nil || id <= 0 {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "ID không hợp lệ"})
+			return
+		}
+
+		var room models.Room
+		if err := config.DB.First(&room, id).Error; err != nil {
+			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"message": "Room không tồn tại"})
+			return
+		}
+
+		if room.NguoiTaoID == nil || *room.NguoiTaoID != u.ID {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"message": "Bạn không có quyền thao tác room này"})
+			return
+		}
+
+		c.Set("roomObj", room)
+		c.Next()
+	}
+}
