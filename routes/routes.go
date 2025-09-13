@@ -53,5 +53,16 @@ func SetupRoutes(r *gin.Engine) {
 		api.PUT("/questions/:id", middleware.CheckQuestionEditor(), controllers.UpdateQuestion)    // BE-06
 		api.DELETE("/questions/:id", middleware.CheckQuestionEditor(), controllers.DeleteQuestion) // BE-07
 
+		// BE-12 - 17: room
+		rooms := api.Group("/rooms")
+		rooms.Use(middleware.AuthJWT())
+		{
+			rooms.POST("", controllers.CreateRoom)
+			rooms.GET("/:id", controllers.GetRoomDetail)
+			rooms.GET("", controllers.ListRooms)
+			rooms.PUT("/:id", middleware.CheckRoomOwner(), controllers.UpdateRoom)
+			rooms.DELETE("/:id", middleware.CheckRoomOwner(), controllers.DeleteRoom)
+			rooms.POST("/:id/password", middleware.CheckRoomOwner(), controllers.SetRoomPassword)
+		}
 	}
 }
