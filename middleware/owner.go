@@ -31,7 +31,7 @@ func CheckFormOwner() gin.HandlerFunc {
 		}
 
 		// Chỉ owner được thao tác
-		if f.NguoiTaoID != u.ID {
+		if f.NguoiTaoID == nil || *f.NguoiTaoID != u.ID {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"message": "Bạn không có quyền thao tác form này"})
 			return
 		}
