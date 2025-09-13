@@ -3,6 +3,7 @@ package controllers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -68,6 +69,72 @@ func CreateRoom(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Tạo room thành công",
 		"data":    room,
+	})
+}
+
+// BE-13: danh sách room
+func ListRooms(c *gin.Context) {
+	var rooms []models.Room
+	query := config.DB.Model(&models.Room{})
+
+	// bỏ qua room đã xóa (delete)
+	query = query.Where("trang_thai != ?", "delete")
+
+	// filter theo owner_id
+	if ownerID := c.Query("owner_id"); ownerID != "" {
+		query = query.Where("nguoi_tao_id = ?", ownerID)
+	}
+
+	// filter theo từ khóa (tìm theo tên room)
+	search := c.Query("search")
+	if search != "" {
+		query = query.Where(
+			"LOWER(ten_room) LIKE ?",
+			"%"+strings.ToLower(search)+"%",
+		)
+	}
+
+	// phân trang
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if page <= 0 {
+		page = 1
+	}
+	offset := (page - 1) * limit
+
+	var total int64
+	query.Count(&total)
+
+	// sắp xếp
+	sortBy := c.DefaultQuery("sort_by", "created_at")                  // name | created_at
+	sortOrder := strings.ToLower(c.DefaultQuery("sort_order", "desc")) // asc | desc
+
+	orderClause := "ngay_tao desc"
+	switch sortBy {
+	case "name":
+		if sortOrder == "asc" {
+			orderClause = "ten_room asc"
+		} else {
+			orderClause = "ten_room desc"
+		}
+	case "created_at":
+		if sortOrder == "asc" {
+			orderClause = "ngay_tao asc"
+		} else {
+			orderClause = "ngay_tao desc"
+		}
+	}
+
+	if err := query.Offset(offset).Limit(limit).Order(orderClause).Find(&rooms).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không lấy được danh sách room"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":  rooms,
+		"total": total,
+		"page":  page,
+		"limit": limit,
 	})
 }
 
