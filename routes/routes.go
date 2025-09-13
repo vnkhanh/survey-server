@@ -35,31 +35,23 @@ func SetupRoutes(r *gin.Engine) {
 			})
 		}
 		forms := api.Group("/forms")
-		forms.Use(middleware.AuthJWT())
 		{
-			// BE-01..04
-			forms.POST("", controllers.CreateForm)
-			forms.GET("/:id", controllers.GetFormDetail)
-			forms.PUT("/:id", middleware.CheckFormOwner(), controllers.UpdateForm)
-			forms.DELETE("/:id", middleware.CheckFormOwner(), controllers.DeleteForm)
+			forms.POST("", middleware.RateLimitFormsCreate(), controllers.CreateForm)         // BE-01
+			forms.GET("/:id", controllers.GetFormDetail)   // BE-02
+			forms.GET("/:id/settings", controllers.GetFormSettings) // BE-10
 
-			// (tuỳ chọn) Archive/Restore
-			forms.PUT("/:id/archive", middleware.CheckFormOwner(), controllers.ArchiveForm)
-			forms.PUT("/:id/restore", middleware.CheckFormOwner(), controllers.RestoreForm)
-
-			// BE-05: thêm câu hỏi
-			forms.POST("/:id/questions", middleware.CheckFormOwner(), controllers.AddQuestion)
-
-			// BE-08: reorder
-			forms.PUT("/:id/questions/reorder", middleware.CheckFormOwner(), controllers.ReorderQuestions)
-
-			// BE-09..10: settings
-			forms.PUT("/:id/settings", middleware.CheckFormOwner(), controllers.UpdateFormSettings)
-			forms.GET("/:id/settings", controllers.GetFormSettings)
+			// Ghi: cần quyền editor (JWT owner hoặc Edit Token)
+			forms.PUT("/:id", middleware.CheckFormEditor(), controllers.UpdateForm)                          // BE-03
+			forms.DELETE("/:id", middleware.CheckFormEditor(), controllers.DeleteForm)                       // BE-04
+			forms.PUT("/:id/archive", middleware.CheckFormEditor(), controllers.ArchiveForm)                 // BE-04
+			forms.PUT("/:id/restore", middleware.CheckFormEditor(), controllers.RestoreForm)                 // BE-04
+			forms.POST("/:id/questions", middleware.CheckFormEditor(), controllers.AddQuestion)              // BE-05
+			forms.PUT("/:id/questions/reorder", middleware.CheckFormEditor(), controllers.ReorderQuestions)  // BE-08
+			forms.PUT("/:id/settings", middleware.CheckFormEditor(), controllers.UpdateFormSettings)         // BE-09
 		}
 
-		api.PUT("/questions/:id", middleware.AuthJWT(), controllers.UpdateQuestion)    // BE-06
-    	api.DELETE("/questions/:id", middleware.AuthJWT(), controllers.DeleteQuestion) // BE-07
+		api.PUT("/questions/:id", middleware.CheckQuestionEditor(), controllers.UpdateQuestion)    // BE-06
+		api.DELETE("/questions/:id", middleware.CheckQuestionEditor(), controllers.DeleteQuestion) // BE-07
 
 	}
 }

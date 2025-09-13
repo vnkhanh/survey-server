@@ -32,6 +32,10 @@ func main() {
 		c.String(200, "Survey server is running")
 	})
 
+	if err := r.SetTrustedProxies(nil); err != nil {
+    panic(err)
+	}
+
 	// Setup routes khác
 	routes.SetupRoutes(r)
 
