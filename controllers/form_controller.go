@@ -9,10 +9,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
-	"github.com/vnkhanh/survey-server/config"
-	"github.com/vnkhanh/survey-server/middleware"
-	"github.com/vnkhanh/survey-server/models"
 	"github.com/vnkhanh/survey-server/utils"
+	"github.com/vnkhanh/survey-server/middleware"
+	"github.com/vnkhanh/survey-server/config"
+	"github.com/vnkhanh/survey-server/models"
 )
 
 /* ========== BE-01: Tạo biểu mẫu khảo sát ========== */
@@ -49,7 +49,7 @@ func CreateForm(c *gin.Context) {
 			ownerID = &u.ID
 		}
 	}
-
+	
 	form := models.KhaoSat{
 		TieuDe:     req.Title,
 		MoTa:       req.Description,
@@ -99,12 +99,12 @@ func CreateForm(c *gin.Context) {
 /* ========== BE-02: Xem chi tiết form ========== */
 
 type QuestionDTO struct {
-	ID      uint             `json:"id"`
-	Type    string           `json:"type"`
-	Content string           `json:"content"`
-	Order   int              `json:"order"`
-	Props   interface{}      `json:"props,omitempty"`
-	Options []models.LuaChon `json:"options,omitempty"`
+    ID      uint             `json:"id"`
+    Type    string           `json:"type"`
+    Content string           `json:"content"`
+    Order   int              `json:"order"`
+    Props   interface{}      `json:"props,omitempty"`
+    Options []models.LuaChon `json:"options,omitempty"`
 }
 
 func GetFormDetail(c *gin.Context) {
@@ -140,14 +140,14 @@ func GetFormDetail(c *gin.Context) {
 
 	out := make([]QuestionDTO, 0, len(form.CauHois))
 	for _, q := range form.CauHois {
-		var props interface{}
-		if q.PropsJSON != "" {
-			_ = json.Unmarshal([]byte(q.PropsJSON), &props)
-		}
-		out = append(out, QuestionDTO{
-			ID: q.ID, Type: q.LoaiCauHoi, Content: q.NoiDung, Order: q.ThuTu,
-			Props: props, Options: q.LuaChons,
-		})
+    	var props interface{}
+    	if q.PropsJSON != "" {
+        	_ = json.Unmarshal([]byte(q.PropsJSON), &props)
+    	}
+    	out = append(out, QuestionDTO{
+        	ID: q.ID, Type: q.LoaiCauHoi, Content: q.NoiDung, Order: q.ThuTu,
+        	Props: props, Options: q.LuaChons,
+    	})
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"id":          form.ID,
@@ -216,30 +216,6 @@ func DeleteForm(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
-}
-
-// GetlistForm
-func ListForms(c *gin.Context) {
-	var forms []models.KhaoSat
-	if err := config.DB.
-		Where("trang_thai <> ?", "deleted").
-		Find(&forms).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể lấy danh sách khảo sát"})
-		return
-	}
-
-	out := make([]gin.H, len(forms))
-	for i, f := range forms {
-		out[i] = gin.H{
-			"id":          f.ID,
-			"title":       f.TieuDe,
-			"description": f.MoTa,
-			"created_at":  f.NgayTao,
-			"trang_thai":  f.TrangThai,
-			"responses":   f.SoPhanHoi, // hoặc 0 nếu chưa tính
-		}
-	}
-	c.JSON(http.StatusOK, out)
 }
 
 /* ========== BE-04 (tuỳ chọn): Archive/Restore bằng trang_thai ========== */
