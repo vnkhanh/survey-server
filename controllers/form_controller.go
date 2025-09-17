@@ -20,26 +20,15 @@ import (
 type createFormReq struct {
 	Title       string          `json:"title"       binding:"required,min=1"`
 	Description string          `json:"description"`
-	TemplateID  *uint           `json:"template_id"` // để mở rộng
-	Settings    json.RawMessage `json:"settings"`    // JSON tuỳ chọn (lưu TEXT)
-	Theme       json.RawMessage `json:"theme"`       // JSON tuỳ chọn (lưu TEXT)
+	TemplateID  *uint           `json:"template_id"`
+	Settings    json.RawMessage `json:"settings"`
+	Theme       json.RawMessage `json:"theme"`
 }
 
 func CreateForm(c *gin.Context) {
-
 	var req createFormReq
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "Payload không hợp lệ", "error": err.Error()})
-		return
-	}
-
-	// Validate JSON fields
-	if len(req.Settings) > 0 && !json.Valid(req.Settings) {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "settings không phải JSON hợp lệ"})
-		return
-	}
-	if len(req.Theme) > 0 && !json.Valid(req.Theme) {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "theme không phải JSON hợp lệ"})
 		return
 	}
 
@@ -57,13 +46,30 @@ func CreateForm(c *gin.Context) {
 		TrangThai:  "active",
 		TemplateID: req.TemplateID,
 	}
+
 	if len(req.Settings) > 0 {
-		form.SettingsJSON = string(req.Settings)
+		s, err := utils.ParseSettings(req.Settings)
+		if err != nil {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"message": err.Error()})
+			return
+		}
+		norm, err := utils.NormalizeSettingsJSON(s)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể lưu settings"})
+			return
+		}
+		form.SettingsJSON = norm
 	}
+
 	if len(req.Theme) > 0 {
+		if !json.Valid(req.Theme) {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "theme không phải JSON hợp lệ"})
+			return
+		}
 		form.ThemeJSON = string(req.Theme)
 	}
 
+	// Nếu là ẩn danh → sinh edit_token
 	var rawToken string
 	var err error
 	if ownerID == nil {
@@ -176,11 +182,6 @@ func UpdateForm(c *gin.Context) {
 		return
 	}
 
-	if req.Settings != nil && len(*req.Settings) > 0 && !json.Valid(*req.Settings) {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "settings không phải JSON hợp lệ"})
-		return
-	}
-
 	updates := map[string]interface{}{}
 	if req.Title != nil {
 		updates["tieu_de"] = *req.Title
@@ -189,8 +190,19 @@ func UpdateForm(c *gin.Context) {
 		updates["mo_ta"] = *req.Description
 	}
 	if req.Settings != nil {
-		updates["settings_json"] = string(*req.Settings)
+		st, err := utils.ParseSettings(*req.Settings)
+		if err != nil {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"message": err.Error()})
+			return
+		}
+		if normalized, err := utils.NormalizeSettingsJSON(st); err == nil {
+			updates["settings_json"] = normalized
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể lưu settings"})
+			return
+		}
 	}
+
 	if len(updates) == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"message": "Không có gì để cập nhật"})
 		return
@@ -205,7 +217,7 @@ func UpdateForm(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "updated"})
 }
 
-/* ========== BE-04: Xoá form (owner-only) — xóa mềm ========== */
+/* ========== BE-04: Xoá form (soft delete) + Archive/Restore ========== */
 
 func DeleteForm(c *gin.Context) {
 	f := c.MustGet("formObj").(models.KhaoSat)
@@ -217,32 +229,6 @@ func DeleteForm(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }
-
-// GetlistForm
-func ListForms(c *gin.Context) {
-	var forms []models.KhaoSat
-	if err := config.DB.
-		Where("trang_thai <> ?", "deleted").
-		Find(&forms).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể lấy danh sách khảo sát"})
-		return
-	}
-
-	out := make([]gin.H, len(forms))
-	for i, f := range forms {
-		out[i] = gin.H{
-			"id":          f.ID,
-			"title":       f.TieuDe,
-			"description": f.MoTa,
-			"created_at":  f.NgayTao,
-			"trang_thai":  f.TrangThai,
-			"responses":   f.SoPhanHoi, // hoặc 0 nếu chưa tính
-		}
-	}
-	c.JSON(http.StatusOK, out)
-}
-
-/* ========== BE-04 (tuỳ chọn): Archive/Restore bằng trang_thai ========== */
 
 func ArchiveForm(c *gin.Context) {
 	f := c.MustGet("formObj").(models.KhaoSat)
@@ -329,9 +315,42 @@ func UpdateFormSettings(c *gin.Context) {
 		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "settings không phải JSON hợp lệ"})
 		return
 	}
+
+	// Load base
+	var base *utils.FormSettings
+	if f.SettingsJSON != "" {
+		parsed, err := utils.ParseSettings([]byte(f.SettingsJSON))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Settings hiện tại lỗi"})
+			return
+		}
+		base = parsed
+	} else {
+		base = &utils.FormSettings{}
+	}
+
+	// Parse patch
+	patch, err := utils.ParseSettings(req.Settings)
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": err.Error()})
+		return
+	}
+
+	// Merge + validate
+	merged := utils.MergeSettings(base, patch)
+	if err := utils.ValidateSettings(merged); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": err.Error()})
+		return
+	}
+
+	norm, err := utils.NormalizeSettingsJSON(merged)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể lưu settings"})
+		return
+	}
 	if err := config.DB.Model(&models.KhaoSat{}).
 		Where("id = ?", f.ID).
-		Update("settings_json", string(req.Settings)).Error; err != nil {
+		Update("settings_json", norm).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Lưu settings thất bại"})
 		return
 	}
@@ -366,47 +385,35 @@ func GetFormSettings(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"settings": settings})
 }
 
-/* ========== BE-11: Cập nhật giao diện (theme) ========== */
+/* ========== BE-11: Cập nhật/Lấy theme ========== */
 
 type updateThemeReq struct {
 	Theme json.RawMessage `json:"theme" binding:"required"`
 }
 
-// PUT /api/forms/:id/theme
 func UpdateFormTheme(c *gin.Context) {
 	f := c.MustGet("formObj").(models.KhaoSat)
 
 	var req updateThemeReq
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{
-			"message": "Payload không hợp lệ",
-			"error":   err.Error(),
-		})
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "Payload không hợp lệ", "error": err.Error()})
 		return
 	}
 
 	if len(req.Theme) == 0 || !json.Valid(req.Theme) {
-		c.JSON(http.StatusUnprocessableEntity, gin.H{
-			"message": "theme không phải JSON hợp lệ",
-		})
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "theme không phải JSON hợp lệ"})
 		return
 	}
 
 	if err := config.DB.Model(&models.KhaoSat{}).
 		Where("id = ?", f.ID).
 		Update("theme_json", string(req.Theme)).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "Lưu theme thất bại",
-		})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Lưu theme thất bại"})
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"message": "updated"})
 }
 
-/* ========== BE-11b: Lấy theme của form ========== */
-
-// GET /api/forms/:id/theme
 func GetFormTheme(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil || id <= 0 {
@@ -418,7 +425,7 @@ func GetFormTheme(c *gin.Context) {
 	if e := config.DB.Select("id, theme_json").
 		Where("id = ? AND trang_thai <> 'deleted'", id).
 		First(&f).Error; e != nil {
-		if e == gorm.ErrRecordNotFound {
+		if errors.Is(e, gorm.ErrRecordNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"message": "Form không tồn tại"})
 			return
 		}
@@ -430,6 +437,5 @@ func GetFormTheme(c *gin.Context) {
 	if f.ThemeJSON != "" {
 		_ = json.Unmarshal([]byte(f.ThemeJSON), &theme)
 	}
-
 	c.JSON(http.StatusOK, gin.H{"theme": theme})
 }
