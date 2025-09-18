@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -45,25 +46,43 @@ func CheckFormOwner() gin.HandlerFunc {
 // CheckRoomOwner: nạp room vào context & xác thực sở hữu
 func CheckRoomOwner() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		u := c.MustGet(CtxUser).(models.NguoiDung)
+		// Lấy user từ context (AuthJWT đã set)
+		u, ok := c.Get(CtxUser)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"message": "Chưa đăng nhập"})
+			return
+		}
+		user := u.(models.NguoiDung)
 
-		id, err := strconv.Atoi(c.Param("id"))
-		if err != nil || id <= 0 {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "ID không hợp lệ"})
+		// Lấy room ID từ param
+		idStr := c.Param("id")
+		roomID, err := strconv.Atoi(idStr)
+		if err != nil || roomID <= 0 {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "ID room không hợp lệ"})
 			return
 		}
 
+		// Lấy room từ DB
 		var room models.Room
-		if err := config.DB.First(&room, id).Error; err != nil {
+		if err := config.DB.First(&room, roomID).Error; err != nil {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"message": "Room không tồn tại"})
 			return
 		}
 
-		if room.NguoiTaoID == nil || *room.NguoiTaoID != u.ID {
+		// Debug log
+		log.Printf("\033[31m[CheckRoomOwner] UserID=%d, RoomID=%d, OwnerID=%v\033[0m\n", user.ID, roomID, room.NguoiTaoID)
+
+		// Kiểm tra quyền sở hữu
+		if room.NguoiTaoID == nil {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"message": "Room chưa có owner"})
+			return
+		}
+		if *room.NguoiTaoID != user.ID {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"message": "Bạn không có quyền thao tác room này"})
 			return
 		}
 
+		// Nạp room vào context
 		c.Set("roomObj", room)
 		c.Next()
 	}

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/google/uuid"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 
@@ -363,4 +365,18 @@ func GetFormTheme(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"theme": theme})
+}
+func CreateFormShare(c *gin.Context) {
+	form := c.MustGet("formObj").(models.KhaoSat)
+	publicLink := "https://survey-server.com/forms/" + uuid.NewString()
+	embedCode := "<iframe src='" + publicLink + "' width='800' height='600'></iframe>"
+
+	form.PublicLink = &publicLink
+	form.EmbedCode = &embedCode
+	if err := config.DB.Save(&form).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không tạo được public link"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"share_url": publicLink, "embed_code": embedCode})
 }
