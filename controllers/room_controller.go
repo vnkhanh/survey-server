@@ -201,28 +201,18 @@ func UpdateRoom(c *gin.Context) {
 	})
 }
 
-// BE-16: xoá room
+// BE-16: xoá room (hard delete - xóa hẳn khỏi DB)
 func DeleteRoom(c *gin.Context) {
 	// roomObj đã được middleware.CheckRoomOwner nạp vào context
 	room := c.MustGet("roomObj").(models.Room)
 
-	// Nếu đã deleted rồi thì báo luôn
-	if room.TrangThai == "deleted" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Room đã được xóa trước đó"})
+	// Xóa trực tiếp trong database
+	if err := config.DB.Delete(&room).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể xóa room"})
 		return
 	}
 
-	// Đánh dấu deleted (deleted)
-	room.TrangThai = "deleted"
-	falseVal := false
-	room.IsPublic = &falseVal
-
-	if err := config.DB.Save(&room).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Đã xóa room"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Room đã được xóa", "data": room})
+	c.JSON(http.StatusOK, gin.H{"message": "Room đã được xóa vĩnh viễn"})
 }
 
 // BE-16: lưu trữ room
