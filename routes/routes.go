@@ -35,50 +35,32 @@ func SetupRoutes(r *gin.Engine) {
 			})
 		}
 		forms := api.Group("/forms")
-		forms.Use(middleware.AuthJWT())
 		{
-			// BE-01..04
-			forms.POST("", controllers.CreateForm)
-			forms.GET("/:id", controllers.GetFormDetail)
-			forms.PUT("/:id", middleware.CheckFormOwner(), controllers.UpdateForm)
-			forms.DELETE("/:id", middleware.CheckFormOwner(), controllers.DeleteForm)
-
-			// (tuỳ chọn) Archive/Restore
-			forms.PUT("/:id/archive", middleware.CheckFormOwner(), controllers.ArchiveForm)
-			forms.PUT("/:id/restore", middleware.CheckFormOwner(), controllers.RestoreForm)
-
-			// BE-05: thêm câu hỏi
-			forms.POST("/:id/questions", middleware.CheckFormOwner(), controllers.AddQuestion)
-
-			// BE-08: reorder
-			forms.PUT("/:id/questions/reorder", middleware.CheckFormOwner(), controllers.ReorderQuestions)
-
-			// BE-09..10: settings
-			forms.PUT("/:id/settings", middleware.CheckFormOwner(), controllers.UpdateFormSettings)
-			forms.GET("/:id/settings", controllers.GetFormSettings)
-
-			// BE-11: themes form
-			forms.PUT("/:id/theme", middleware.CheckFormOwner(), controllers.UpdateFormTheme)
-			forms.GET("/:id/theme", controllers.GetFormTheme)
+			forms.POST("", middleware.RateLimitFormsCreate(), controllers.CreateForm) // BE-01
+			forms.GET("/:id", controllers.GetFormDetail)                              // BE-02
+			forms.GET("/:id/settings", controllers.GetFormSettings)                   // BE-10
+			// Ghi: cần quyền editor (JWT owner hoặc Edit Token)
+			forms.PUT("/:id", middleware.CheckFormEditor(), controllers.UpdateForm)                         // BE-03
+			forms.DELETE("/:id", middleware.CheckFormEditor(), controllers.DeleteForm)                      // BE-04
+			forms.PUT("/:id/archive", middleware.CheckFormEditor(), controllers.ArchiveForm)                // BE-04
+			forms.PUT("/:id/restore", middleware.CheckFormEditor(), controllers.RestoreForm)                // BE-04
+			forms.POST("/:id/questions", middleware.CheckFormEditor(), controllers.AddQuestion)             // BE-05
+			forms.PUT("/:id/questions/reorder", middleware.CheckFormEditor(), controllers.ReorderQuestions) // BE-08
+			forms.PUT("/:id/settings", middleware.CheckFormEditor(), controllers.UpdateFormSettings)        // BE-09
 		}
 
-		api.PUT("/questions/:id", middleware.AuthJWT(), controllers.UpdateQuestion)    // BE-06
-		api.DELETE("/questions/:id", middleware.AuthJWT(), controllers.DeleteQuestion) // BE-07
+		api.PUT("/questions/:id", middleware.CheckQuestionEditor(), controllers.UpdateQuestion)    // BE-06
+		api.DELETE("/questions/:id", middleware.CheckQuestionEditor(), controllers.DeleteQuestion) // BE-07
 
-		// BE-12: room
+		// BE-12 - 17: room
 		rooms := api.Group("/rooms")
 		rooms.Use(middleware.AuthJWT())
 		{
-			rooms.POST("", controllers.CreateRoom)                                                     //13
-			rooms.GET("/:id", controllers.GetRoomDetail)                                               //14
-			rooms.PUT("/:id", middleware.CheckRoomOwner(), controllers.UpdateRoom)                     //15
-			rooms.DELETE("/:id", middleware.CheckRoomOwner(), controllers.DeleteRoom)                  //16
-			rooms.POST("/:id/password", middleware.CheckRoomOwner(), controllers.SetRoomPassword)      //17
-			rooms.DELETE("/:id/password", middleware.CheckRoomOwner(), controllers.RemoveRoomPassword) //18
-			rooms.POST("/:id/share", middleware.CheckRoomOwner(), controllers.CreateRoomShare)         // 19
-			forms.POST("/:id/share", middleware.CheckFormOwner(), controllers.CreateFormShare)         //20
-			rooms.POST("/:id/enter", controllers.EnterRoom)                                            // BE-22 Tham gia room
+			rooms.POST("", controllers.CreateRoom)
+			rooms.GET("/:id", controllers.GetRoomDetail)
+			rooms.PUT("/:id", middleware.CheckRoomOwner(), controllers.UpdateRoom)
+			rooms.DELETE("/:id", middleware.CheckRoomOwner(), controllers.DeleteRoom)
+			rooms.POST("/:id/password", middleware.CheckRoomOwner(), controllers.SetRoomPassword)
 		}
-		api.GET("/lobby", controllers.GetLobbyRooms) //BE21 Lấy danh sách room public (lobby)
 	}
 }

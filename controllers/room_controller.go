@@ -22,6 +22,7 @@ func CreateRoom(c *gin.Context) {
 		KhaoSatID uint    `json:"khao_sat_id" binding:"required"`
 		TenRoom   string  `json:"ten_room" binding:"required"`
 		MoTa      *string `json:"mo_ta"`
+		IsPublic  *bool   `json:"is_public"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -56,6 +57,7 @@ func CreateRoom(c *gin.Context) {
 		NguoiTaoID: &u.ID,
 		TrangThai:  "active",
 		Khoa:       false,
+		IsPublic:   req.IsPublic,
 		NgayTao:    time.Now(),
 		ShareURL:   shareURL,
 	}
@@ -67,6 +69,48 @@ func CreateRoom(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Tạo room thành công",
 		"data":    room,
+	})
+}
+
+// BE-13: danh sách room của người quản lý
+func ListRooms(c *gin.Context) {
+	u := c.MustGet(middleware.CtxUser).(models.NguoiDung) // lấy user từ token
+
+	var rooms []models.Room
+	query := config.DB.Model(&models.Room{}).
+		Where("nguoi_tao_id = ?", u.ID). // chỉ lấy room do user này tạo
+		Where("trang_thai != ?", "deleted")
+
+	// filter theo tên (q)
+	if q := c.Query("q"); q != "" {
+		query = query.Where("ten_room LIKE ?", "%"+q+"%")
+	}
+
+	// phân trang
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if page < 1 {
+		page = 1
+	}
+	offset := (page - 1) * limit
+
+	var total int64
+	query.Count(&total)
+
+	if err := query.
+		Limit(limit).
+		Offset(offset).
+		Order("ngay_tao DESC").
+		Find(&rooms).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể lấy danh sách room"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":  rooms,
+		"page":  page,
+		"limit": limit,
+		"total": total,
 	})
 }
 
@@ -96,6 +140,7 @@ func GetRoomDetail(c *gin.Context) {
 			"trang_thai": room.TrangThai,
 			"khoa":       room.Khoa,
 			"share_url":  room.ShareURL,
+			"is_public":  room.IsPublic,
 			"khao_sat": gin.H{
 				"id":      form.ID,
 				"tieu_de": form.TieuDe,
@@ -105,7 +150,6 @@ func GetRoomDetail(c *gin.Context) {
 	})
 }
 
-// BE-15: cập nhật room
 func UpdateRoom(c *gin.Context) {
 	// roomObj đã được middleware.CheckRoomOwner nạp vào context
 	room := c.MustGet("roomObj").(models.Room)
@@ -114,6 +158,7 @@ func UpdateRoom(c *gin.Context) {
 		TenRoom   *string `json:"ten_room"`
 		MoTa      *string `json:"mo_ta"`
 		KhaoSatID *uint   `json:"khao_sat_id"`
+		IsPublic  *bool   `json:"is_public"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -121,13 +166,26 @@ func UpdateRoom(c *gin.Context) {
 		return
 	}
 
+	// update từng field nếu có
 	if req.TenRoom != nil {
 		room.TenRoom = *req.TenRoom
 	}
 	if req.MoTa != nil {
 		room.MoTa = req.MoTa
 	}
+	if req.IsPublic != nil {
+		room.IsPublic = req.IsPublic
+	}
 	if req.KhaoSatID != nil {
+		var ks models.KhaoSat
+		if err := config.DB.First(&ks, *req.KhaoSatID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"message": "Khảo sát không tồn tại"})
+			return
+		}
+		if ks.TrangThai != "published" && ks.TrangThai != "active" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Chỉ có thể liên kết room với khảo sát đã publish hoặc đang active"})
+			return
+		}
 		room.KhaoSatID = *req.KhaoSatID
 	}
 
@@ -136,29 +194,70 @@ func UpdateRoom(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Cập nhật room thành công", "data": room})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Cập nhật room thành công",
+		"data":    room,
+	})
 }
 
-// BE-16: xoá room
+// BE-16: xoá room (hard delete - xóa hẳn khỏi DB)
 func DeleteRoom(c *gin.Context) {
 	// roomObj đã được middleware.CheckRoomOwner nạp vào context
 	room := c.MustGet("roomObj").(models.Room)
 
-	// Nếu đã inactive rồi thì báo luôn
-	if room.TrangThai == "inactive" {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "Room đã được lưu trữ trước đó"})
+	// Xóa trực tiếp trong database
+	if err := config.DB.Delete(&room).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể xóa room"})
 		return
 	}
 
-	// Đánh dấu inactive (archive)
-	room.TrangThai = "inactive"
+	c.JSON(http.StatusOK, gin.H{"message": "Room đã được xóa vĩnh viễn"})
+}
+
+// BE-16: lưu trữ room
+func ArchiveRoom(c *gin.Context) {
+	// roomObj đã được middleware.CheckRoomOwner nạp vào context
+	room := c.MustGet("roomObj").(models.Room)
+
+	// Nếu đã archived rồi thì báo luôn
+	if room.TrangThai == "archived" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Room đã được lưu trữ rồi"})
+		return
+	}
+
+	// Đánh dấu archived (archived)
+	room.TrangThai = "archived"
+	falseVal := false
+	room.IsPublic = &falseVal
 
 	if err := config.DB.Save(&room).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể lưu trữ room"})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Đã lưu trữ room"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Room đã được lưu trữ (archive)", "data": room})
+	c.JSON(http.StatusOK, gin.H{"message": "Room đã được lưu trữ", "data": room})
+}
+
+// BE-16: khôi phục room
+func RestoreRoom(c *gin.Context) {
+	// roomObj đã được middleware.CheckRoomOwner nạp vào context
+	room := c.MustGet("roomObj").(models.Room)
+
+	// Nếu đã restored rồi thì báo luôn
+	if room.TrangThai == "active" {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "Room đã được khôi phục rồi"})
+		return
+	}
+
+	// Đánh dấu restored (restored)
+	room.TrangThai = "active"
+
+	if err := config.DB.Save(&room).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Đã khôi phục room"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Room đã được khôi phục", "data": room})
 }
 
 // BE-17: đặt khoá room
@@ -184,7 +283,6 @@ func SetRoomPassword(c *gin.Context) {
 
 	// Cập nhật room
 	room.MatKhau = &pwd
-	room.TrangThai = "locked"
 	room.Khoa = true
 
 	if err := config.DB.Save(&room).Error; err != nil {
