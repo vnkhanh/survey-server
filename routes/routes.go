@@ -61,7 +61,9 @@ func SetupRoutes(r *gin.Engine) {
 			rooms.GET("", controllers.ListRooms)
 			rooms.PUT("/:id", middleware.CheckRoomOwner(), controllers.UpdateRoom)
 			rooms.DELETE("/:id", middleware.CheckRoomOwner(), controllers.DeleteRoom)
-			rooms.POST("/:id/password", middleware.CheckRoomOwner(), controllers.SetRoomPassword)
+			rooms.PUT("/:id/archive", middleware.CheckRoomOwner(), controllers.ArchiveRoom)
+			rooms.PUT("/:id/restore", middleware.CheckRoomOwner(), controllers.RestoreRoom)
+			rooms.POST("/:id/set-password", middleware.CheckRoomOwner(), controllers.SetRoomPassword)
 		}
 	}
 }
