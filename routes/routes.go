@@ -39,7 +39,6 @@ func SetupRoutes(r *gin.Engine) {
 			forms.POST("", middleware.RateLimitFormsCreate(), controllers.CreateForm) // BE-01
 			forms.GET("/:id", controllers.GetFormDetail)                              // BE-02
 			forms.GET("/:id/settings", controllers.GetFormSettings)                   // BE-10
-			forms.GET("", controllers.ListForms)
 			// Ghi: cần quyền editor (JWT owner hoặc Edit Token)
 			forms.PUT("/:id", middleware.CheckFormEditor(), controllers.UpdateForm)                         // BE-03
 			forms.DELETE("/:id", middleware.CheckFormEditor(), controllers.DeleteForm)                      // BE-04
