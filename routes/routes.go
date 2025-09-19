@@ -56,6 +56,17 @@ func SetupRoutes(r *gin.Engine) {
 		rooms := api.Group("/rooms")
 		rooms.Use(middleware.AuthJWT())
 		{
+
+			rooms.POST("", controllers.CreateRoom)                                                     //13
+			rooms.GET("/:id", controllers.GetRoomDetail)                                               //14
+			rooms.PUT("/:id", middleware.CheckRoomOwner(), controllers.UpdateRoom)                     //15
+			rooms.DELETE("/:id", middleware.CheckRoomOwner(), controllers.DeleteRoom)                  //16
+			rooms.POST("/:id/password", middleware.CheckRoomOwner(), controllers.SetRoomPassword)      //17
+			rooms.DELETE("/:id/password", middleware.CheckRoomOwner(), controllers.RemoveRoomPassword) //18
+			rooms.POST("/:id/share", middleware.CheckRoomOwner(), controllers.CreateRoomShare)         // 19
+			forms.POST("/:id/share", middleware.CheckFormOwner(), controllers.CreateFormShare)         //20
+			rooms.POST("/:id/enter", controllers.EnterRoom)                                            // BE-22 Tham gia room
+
 			rooms.POST("", controllers.CreateRoom)
 			rooms.GET("/:id", controllers.GetRoomDetail)
 			rooms.GET("", controllers.ListRooms)
@@ -65,5 +76,6 @@ func SetupRoutes(r *gin.Engine) {
 			rooms.PUT("/:id/restore", middleware.CheckRoomOwner(), controllers.RestoreRoom)
 			rooms.POST("/:id/set-password", middleware.CheckRoomOwner(), controllers.SetRoomPassword)
 		}
+		api.GET("/lobby", controllers.GetLobbyRooms) //BE21 Lấy danh sách room public (lobby)
 	}
 }

@@ -66,7 +66,6 @@ func CreateRoom(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không tạo được room"})
 		return
 	}
-
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Tạo room thành công",
 		"data":    room,
@@ -292,4 +291,111 @@ func SetRoomPassword(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đặt mật khẩu thành công", "data": room})
+}
+
+// BE-18: gỡ mật khẩu room
+func RemoveRoomPassword(c *gin.Context) {
+	room := c.MustGet("roomObj").(models.Room)
+
+	room.MatKhau = nil
+	room.Khoa = false
+	if room.TrangThai == "locked" {
+		room.TrangThai = "active"
+	}
+	config.DB.Save(&room)
+	if err := config.DB.Save(&room).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không gỡ được mật khẩu"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Đã gỡ mật khẩu Room", "data": room})
+}
+
+// Tạo short link / token chia sẻ room
+func CreateRoomShare(c *gin.Context) {
+	// roomObj đã được middleware.CheckRoomOwner nạp vào context
+	room := c.MustGet("roomObj").(models.Room)
+
+	// Kiểm tra quyền chia sẻ theo setting
+	if room.Khoa {
+		c.JSON(http.StatusForbidden, gin.H{"message": "Room đang bị khoá, không thể chia sẻ"})
+		return
+	}
+
+	// Tạo short link hoặc token
+	shortLink := uuid.NewString()
+	room.ShareURL = shortLink
+
+	// Lưu DB
+	if err := config.DB.Save(&room).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không tạo được share link"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"share_url": room.ShareURL,
+	})
+}
+
+// BE21 Lấy danh sách room public (lobby)
+func GetLobbyRooms(c *gin.Context) {
+	var rooms []models.Room
+
+	if err := config.DB.
+		Where("khoa = ? AND trang_thai = ?", false, "active").
+		Find(&rooms).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không lấy được danh sách room", "error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": rooms})
+}
+
+// BE22 Tham gia room (enter room)
+func EnterRoom(c *gin.Context) {
+	// Lấy user hiện tại
+	u := c.MustGet(middleware.CtxUser).(models.NguoiDung)
+
+	// Lấy room ID từ path
+	id := c.Param("id")
+
+	var room models.Room
+	if err := config.DB.First(&room, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "Room không tồn tại"})
+		return
+	}
+
+	// Nếu room có khóa
+	if room.Khoa && room.MatKhau != nil {
+		var req struct {
+			Password string `json:"password"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil || req.Password == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Room yêu cầu mật khẩu"})
+			return
+		}
+
+		// So sánh mật khẩu
+		if err := bcrypt.CompareHashAndPassword([]byte(*room.MatKhau), []byte(req.Password)); err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"message": "Mật khẩu không đúng"})
+			return
+		}
+	}
+
+	// Tạo participant record
+	participant := models.RoomNguoiThamGia{
+		RoomID:      room.ID,
+		NguoiDungID: u.ID,
+		TrangThai:   "active",
+	}
+
+	if err := config.DB.Create(&participant).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể tham gia room"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":         "success",
+		"participant_id": participant.ID,
+	})
 }

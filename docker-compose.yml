@@ -1,11 +1,9 @@
-version: "3.9"
-
 services:
   app:
     build: .
     container_name: survey-server
     ports:
-      - "8081:8080"
+      - "8080:8080"
     env_file:
       - .env
     environment:
@@ -17,7 +15,8 @@ services:
       JWT_SECRET: supersecretkey_1234567
       GOOGLE_CLIENT_ID: 232923029113-4qmipgl9dlonv1p6t7i0vbgu2l7j2cpn.apps.googleusercontent.com
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - survey-network
 
@@ -32,6 +31,11 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d survey_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - survey-network
 
