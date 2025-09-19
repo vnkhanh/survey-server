@@ -20,7 +20,7 @@ func ConnectDB() {
 	// Load biến môi trường từ file .env (nếu có)
 	err := godotenv.Load()
 	if err != nil {
-		log.Println("⚠️  No .env file found, using system environment variables")
+		log.Println("No .env file found, using system environment variables")
 	}
 
 	// Lấy biến môi trường
@@ -33,7 +33,7 @@ func ConnectDB() {
 	// Chuyển port từ string -> int
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		log.Fatalf("❌ Invalid DB_PORT: %v", err)
+		log.Fatalf("Invalid DB_PORT: %v", err)
 	}
 
 	// DSN PostgreSQL
@@ -70,9 +70,9 @@ func ConnectDB() {
 		&models.Room{},
 		&models.RoomNguoiThamGia{},
 	); err != nil {
-		log.Fatalf("❌ Failed to migrate: %v", err)
+		log.Fatalf("Failed to migrate: %v", err)
 	}
 
 	DB = db
-	log.Println("✅ Connected to PostgreSQL & migrated successfully")
+	log.Println("Connected to PostgreSQL & migrated successfully")
 }
