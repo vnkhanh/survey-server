@@ -36,6 +36,7 @@ func SetupRoutes(r *gin.Engine) {
 		}
 		forms := api.Group("/forms")
 		{
+			forms.Use(middleware.AuthJWT())
 			forms.POST("", middleware.RateLimitFormsCreate(), controllers.CreateForm) // BE-01
 			forms.GET("/:id", controllers.GetFormDetail)                              // BE-02
 			forms.GET("/:id/settings", controllers.GetFormSettings)                   // BE-10
@@ -71,5 +72,7 @@ func SetupRoutes(r *gin.Engine) {
 			rooms.PUT("/:id/restore", middleware.CheckRoomOwner(), controllers.RestoreRoom)
 		}
 		api.GET("/lobby", controllers.GetLobbyRooms) //BE21 Lấy danh sách room public (lobby)
+		api.POST("/forms/:id/submissions", middleware.OptionalAuth(), controllers.SubmitSurvey)
+
 	}
 }
