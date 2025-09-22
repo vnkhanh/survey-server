@@ -33,6 +33,10 @@ func UploadToSupabase(file interface{}, filename string, fileID string, folder s
 		if contentType == "" {
 			contentType = fh.Header.Get("Content-Type")
 		}
+		// Đảm bảo con trỏ file được reset về đầu
+		if _, err := f.Seek(0, 0); err != nil {
+			return "", err
+		}
 	}
 
 	// Nếu là []byte (ví dụ file sinh ra từ AI)

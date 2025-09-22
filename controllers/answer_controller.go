@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"strconv"
 	"strings"
@@ -50,21 +51,57 @@ func SubmitSurvey(c *gin.Context) {
 		CollectEmail bool `json:"collect_email"`
 		MaxResponses *int `json:"max_responses"`
 	}
-	_ = json.Unmarshal([]byte(ks.SettingsJSON), &settings)
+	if err := json.Unmarshal([]byte(ks.SettingsJSON), &settings); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cấu hình khảo sát không hợp lệ"})
+		return
+	}
 
-	// 4. Parse body
+	// 4. Kiểm tra giới hạn số phản hồi
+	if settings.MaxResponses != nil {
+		var count int64
+		if err := config.DB.Model(&models.PhanHoi{}).Where("khao_sat_id = ?", surveyID).Count(&count).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể kiểm tra số phản hồi"})
+			return
+		}
+		if count >= int64(*settings.MaxResponses) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Khảo sát đã đạt giới hạn số phản hồi"})
+			return
+		}
+	}
+
+	// 5. Parse request body - QUAN TRỌNG: Xử lý multipart form
 	var req SubmitSurveyReq
-	if data := c.PostForm("data"); data != "" {
+
+	// Kiểm tra xem request có phải là multipart form không
+	if strings.Contains(c.Request.Header.Get("Content-Type"), "multipart/form-data") {
+		// Xử lý multipart form
+		data := c.PostForm("data")
+		if data == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Thiếu dữ liệu form"})
+			return
+		}
+
 		if err := json.Unmarshal([]byte(data), &req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu JSON không hợp lệ"})
 			return
 		}
-	} else if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu gửi không hợp lệ"})
-		return
+	} else {
+		// Xử lý JSON request
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu gửi không hợp lệ: " + err.Error()})
+			return
+		}
 	}
 
-	// 5. Kiểm tra đăng nhập
+	// 6. Validate email nếu có
+	if req.Email != nil && *req.Email != "" {
+		if !isValidEmail(*req.Email) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Email không hợp lệ"})
+			return
+		}
+	}
+
+	// 7. Kiểm tra đăng nhập
 	var userID *uint
 	if u, exists := c.Get("user"); exists {
 		if user, ok := u.(models.NguoiDung); ok {
@@ -76,7 +113,7 @@ func SubmitSurvey(c *gin.Context) {
 		return
 	}
 
-	// 6. Validate câu trả lời (dựa trên DB, không tin client.LoaiCauHoi)
+	// 8. Validate câu trả lời
 	for _, ans := range req.Answers {
 		var q models.CauHoi
 		if err := config.DB.
@@ -91,19 +128,23 @@ func SubmitSurvey(c *gin.Context) {
 			Required bool `json:"required"`
 		}
 		if q.PropsJSON != "" {
-			_ = json.Unmarshal([]byte(q.PropsJSON), &props)
+			if err := json.Unmarshal([]byte(q.PropsJSON), &props); err != nil {
+				log.Printf("Lỗi parse props JSON cho câu hỏi %d: %v", ans.CauHoiID, err)
+			}
 		}
 
 		if props.Required {
-			switch q.LoaiCauHoi {
-			case "multiple_choice":
-				if strings.TrimSpace(ans.LuaChon) == "" {
+			switch strings.ToUpper(q.LoaiCauHoi) {
+			case "MULTIPLE_CHOICE":
+				if strings.TrimSpace(ans.LuaChon) == "" || ans.LuaChon == "[]" {
 					c.JSON(http.StatusBadRequest,
 						gin.H{"error": fmt.Sprintf("Câu hỏi %d là bắt buộc", ans.CauHoiID)})
 					return
 				}
-			case "upload_file":
-				if _, err := c.FormFile(fmt.Sprintf("file_%d", ans.CauHoiID)); err != nil {
+			case "UPLOAD_FILE":
+				// Kiểm tra file trong form data
+				fileKey := fmt.Sprintf("file_%d", ans.CauHoiID)
+				if _, err := c.FormFile(fileKey); err != nil {
 					c.JSON(http.StatusBadRequest,
 						gin.H{"error": fmt.Sprintf("Thiếu file cho câu hỏi %d", ans.CauHoiID)})
 					return
@@ -118,7 +159,7 @@ func SubmitSurvey(c *gin.Context) {
 		}
 	}
 
-	// 7. Chuẩn bị phản hồi
+	// 9. Chuẩn bị phản hồi
 	emailPtr := req.Email
 	if userID != nil {
 		var user models.NguoiDung
@@ -149,7 +190,7 @@ func SubmitSurvey(c *gin.Context) {
 			return err
 		}
 
-		// 9. Lưu từng câu trả lời
+		// 10. Lưu từng câu trả lời
 		for _, ans := range req.Answers {
 			var q models.CauHoi
 			if err := tx.Where("id = ? AND khao_sat_id = ?", ans.CauHoiID, surveyID).
@@ -162,22 +203,27 @@ func SubmitSurvey(c *gin.Context) {
 				CauHoiID:  ans.CauHoiID,
 			}
 
-			switch q.LoaiCauHoi {
-			case "multiple_choice":
+			switch strings.ToUpper(q.LoaiCauHoi) {
+			case "MULTIPLE_CHOICE":
 				ct.LuaChon = ans.LuaChon
-			case "upload_file":
+			case "UPLOAD_FILE":
 				fileKey := fmt.Sprintf("file_%d", ans.CauHoiID)
 				fileHeader, err := c.FormFile(fileKey)
 				if err != nil {
 					return fmt.Errorf("thiếu file bắt buộc cho câu hỏi %d: %w", ans.CauHoiID, err)
 				}
 
-				fileID := fmt.Sprintf("%d", time.Now().UnixNano()) // tên file
-				folder := "answers"                                // folder trong bucket
+				// Validate file
+				if err := validateFile(fileHeader); err != nil {
+					return fmt.Errorf("file không hợp lệ cho câu hỏi %d: %w", ans.CauHoiID, err)
+				}
+
+				fileID := fmt.Sprintf("%d_%d", submission.ID, ans.CauHoiID)
+				folder := "answers"
 
 				publicURL, upErr := utils.UploadToSupabase(
 					fileHeader,
-					fileHeader.Filename, // để lấy ext
+					fileHeader.Filename,
 					fileID,
 					folder,
 					"",
@@ -186,7 +232,6 @@ func SubmitSurvey(c *gin.Context) {
 					return fmt.Errorf("upload thất bại cho câu hỏi %d: %w", ans.CauHoiID, upErr)
 				}
 
-				log.Printf("Link supabase %s\n", publicURL)
 				ct.NoiDung = publicURL
 
 			default:
@@ -198,20 +243,62 @@ func SubmitSurvey(c *gin.Context) {
 			}
 		}
 
-		// 10. Cập nhật số phản hồi
+		// 11. Cập nhật số phản hồi
 		return tx.Model(&models.KhaoSat{}).
 			Where("id = ?", surveyID).
 			UpdateColumn("so_phan_hoi", gorm.Expr("so_phan_hoi + 1")).Error
 	})
 
 	if err != nil {
-		// Lỗi validate đã return trong transaction => rollback
+		log.Printf("Lỗi khi lưu phản hồi: %v", err)
 		c.JSON(http.StatusInternalServerError,
-			gin.H{"error": fmt.Sprintf("Không thể lưu phản hồi: %v", err)})
+			gin.H{"error": "Không thể lưu phản hồi"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Gửi khảo sát thành công"})
+}
+
+// Helper functions
+func isValidEmail(email string) bool {
+	return strings.Contains(email, "@") && strings.Contains(email, ".")
+}
+
+func validateFile(fileHeader *multipart.FileHeader) error {
+	// Giới hạn kích thước file (10MB)
+	if fileHeader.Size > 10<<20 {
+		return fmt.Errorf("file vượt quá kích thước cho phép")
+	}
+
+	// Kiểm tra loại file (chỉ cho phép một số loại nhất định)
+	allowedTypes := map[string]bool{
+		"image/jpeg":         true,
+		"image/png":          true,
+		"image/gif":          true,
+		"application/pdf":    true,
+		"application/msword": true,
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+	}
+
+	file, err := fileHeader.Open()
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Chỉ kiểm tra 512 byte đầu để xác định loại file
+	buffer := make([]byte, 512)
+	_, err = file.Read(buffer)
+	if err != nil {
+		return err
+	}
+
+	contentType := http.DetectContentType(buffer)
+	if !allowedTypes[contentType] {
+		return fmt.Errorf("loại file không được hỗ trợ")
+	}
+
+	return nil
 }
 
 // GET /api/forms/:id/submissions?page=1&limit=10&start_date=2025-09-01&end_date=2025-09-21
