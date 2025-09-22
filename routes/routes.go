@@ -51,9 +51,9 @@ func SetupRoutes(r *gin.Engine) {
 			forms.POST("/:id/share", controllers.CreateFormShare) // BE-20
 			// Lấy form public theo shareToken
 			forms.GET("/public/:shareToken", controllers.GetPublicForm) // BE-20
-			forms.POST("/:id/answers", controllers.SubmitFormAnswer)    //
-			forms.PATCH("/:id/limit", controllers.UpdateFormLimit)      // API cập nhật giới hạn trả lời
-			forms.POST("/:id/clone", controllers.CloneForm)             // Clone form (bao gồm câu hỏi + lựa chọn) // BE-32
+
+			forms.PATCH("/:id/limit", controllers.UpdateFormLimit) // API cập nhật giới hạn trả lời
+			forms.POST("/:id/clone", controllers.CloneForm)        // Clone form (bao gồm câu hỏi + lựa chọn) // BE-32
 		}
 
 		api.PUT("/questions/:id", middleware.CheckQuestionEditor(), controllers.UpdateQuestion)    // BE-06
