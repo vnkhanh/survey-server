@@ -441,17 +441,137 @@ func GetFormTheme(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"theme": theme})
 }
-func CreateFormShare(c *gin.Context) {
-	form := c.MustGet("formObj").(models.KhaoSat)
-	publicLink := "https://survey-server.com/forms/" + uuid.NewString()
-	embedCode := "<iframe src='" + publicLink + "' width='800' height='600'></iframe>"
 
-	form.PublicLink = &publicLink
-	form.EmbedCode = &embedCode
-	if err := config.DB.Save(&form).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không tạo được public link"})
+// POST /api/forms/:id/share  Admin gọi POST /api/forms/{id}/share → sinh link + embed code .
+func CreateFormShare(c *gin.Context) {
+	id := c.Param("id")
+
+	var form models.KhaoSat
+	if err := config.DB.First(&form, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "Form không tồn tại"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"share_url": publicLink, "embed_code": embedCode})
+	token := uuid.NewString()
+	publicLink := "https://survey-server.com/forms/" + token
+	embedCode := "<iframe src='" + publicLink + "' width='800' height='600'></iframe>"
+
+	form.ShareToken = &token
+	form.PublicLink = &publicLink
+	form.EmbedCode = &embedCode
+
+	if err := config.DB.Save(&form).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không tạo được share link"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"share_url":  publicLink,
+		"embed_code": embedCode,
+	})
+}
+
+// GET /api/forms/:public/shareToken
+func GetPublicForm(c *gin.Context) {
+	token := c.Param("shareToken")
+
+	var form models.KhaoSat
+	if err := config.DB.Where("share_token = ?", token).First(&form).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "Form không tồn tại"})
+		return
+	}
+
+	// Kiểm tra giới hạn số lần trả lời
+	if form.GioiHanTL != nil && form.SoLanTraLoi >= *form.GioiHanTL {
+		c.JSON(http.StatusForbidden, gin.H{"message": "Đã đạt giới hạn số lần trả lời"})
+		return
+	}
+
+	// Tăng số lần trả lời
+	form.SoLanTraLoi++
+	if err := config.DB.Save(&form).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể cập nhật số lần trả lời"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":             form.ID,
+		"tieu_de":        form.TieuDe,
+		"mo_ta":          form.MoTa,
+		"so_lan_tra_loi": form.SoLanTraLoi,
+		"gioi_han":       form.GioiHanTL,
+	})
+}
+
+// PUT /api/forms/:id/limit
+func UpdateFormLimit(c *gin.Context) {
+	formID := c.Param("id")
+
+	var req struct {
+		GioiHanTL int `json:"gioi_han_tl"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"message": "Payload không hợp lệ"})
+		return
+	}
+
+	var form models.KhaoSat
+	if err := config.DB.First(&form, "id = ?", formID).Error; err != nil {
+		c.JSON(404, gin.H{"message": "Form không tồn tại"})
+		return
+	}
+
+	form.GioiHanTL = &req.GioiHanTL
+	if err := config.DB.Save(&form).Error; err != nil {
+		c.JSON(500, gin.H{"message": "Không thể cập nhật giới hạn"})
+		return
+	}
+
+	c.JSON(200, gin.H{"message": "Cập nhật giới hạn thành công", "gioi_han_tl": req.GioiHanTL})
+}
+
+// BE-32 Clone Form (bao gồm câu hỏi + lựa chọn)
+func CloneForm(c *gin.Context) {
+	id := c.Param("id")
+	var form models.KhaoSat
+
+	// Lấy form gốc
+	if err := config.DB.Preload("CauHois.LuaChons").First(&form, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "Form không tồn tại"})
+		return
+	}
+
+	// Tạo form mới từ form gốc
+	newForm := form
+	newForm.ID = 0
+	newForm.TieuDe = form.TieuDe + " (Copy)"
+
+	if err := config.DB.Create(&newForm).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể clone form", "error": err.Error()})
+		return
+	}
+
+	// Clone câu hỏi và lựa chọn
+	for _, q := range form.CauHois {
+		newQ := q
+		newQ.ID = 0
+		newQ.KhaoSatID = newForm.ID
+
+		if err := config.DB.Create(&newQ).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể clone câu hỏi", "error": err.Error()})
+			return
+		}
+
+		for _, lc := range q.LuaChons {
+			newLC := lc
+			newLC.ID = 0
+			newLC.CauHoiID = newQ.ID
+			if err := config.DB.Create(&newLC).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể clone lựa chọn", "error": err.Error()})
+				return
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Clone form thành công", "data": newForm})
 }

@@ -15,9 +15,13 @@ type KhaoSat struct {
 	SettingsJSON  string     `gorm:"column:settings_json;type:text" json:"-"`
 	ThemeJSON     string     `gorm:"column:theme_json;type:text" json:"-"`
 	EditTokenHash string     `gorm:"column:edit_token_hash;type:text" json:"-"`
-	// Thêm 2 trường mới để lưu public link và embed code
-	PublicLink *string `gorm:"column:public_link;size:255" json:"public_link"`
-	EmbedCode  *string `gorm:"column:embed_code;type:text" json:"embed_code"`
+
+	// Thêm trường để share form
+	ShareToken  *string `gorm:"column:share_token;uniqueIndex" json:"share_token"`
+	PublicLink  *string `gorm:"column:public_link;size:255" json:"public_link"`
+	EmbedCode   *string `gorm:"column:embed_code;type:text" json:"embed_code"`
+	GioiHanTL   *int    `gorm:"column:gioi_han_tra_loi" json:"gioi_han_tra_loi"`       // giới hạn số lần trả lời
+	SoLanTraLoi int     `gorm:"column:so_lan_tra_loi;default:0" json:"so_lan_tra_loi"` // đã trả lời
 
 	NguoiTao *NguoiDung `gorm:"foreignKey:NguoiTaoID;references:ID;constraint:OnUpdate:CASCADE,OnDelete:SET NULL;" json:"-"`
 

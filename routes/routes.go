@@ -47,6 +47,13 @@ func SetupRoutes(r *gin.Engine) {
 			forms.POST("/:id/questions", middleware.CheckFormEditor(), controllers.AddQuestion)             // BE-05
 			forms.PUT("/:id/questions/reorder", middleware.CheckFormEditor(), controllers.ReorderQuestions) // BE-08
 			forms.PUT("/:id/settings", middleware.CheckFormEditor(), controllers.UpdateFormSettings)        // BE-09
+			// Tạo link chia sẻ form
+			forms.POST("/:id/share", controllers.CreateFormShare) // BE-20
+			// Lấy form public theo shareToken
+			forms.GET("/public/:shareToken", controllers.GetPublicForm) // BE-20
+			forms.POST("/:id/answers", controllers.SubmitFormAnswer)    //
+			forms.PATCH("/:id/limit", controllers.UpdateFormLimit)      // API cập nhật giới hạn trả lời
+			forms.POST("/:id/clone", controllers.CloneForm)             // Clone form (bao gồm câu hỏi + lựa chọn) // BE-32
 		}
 
 		api.PUT("/questions/:id", middleware.CheckQuestionEditor(), controllers.UpdateQuestion)    // BE-06
@@ -63,13 +70,20 @@ func SetupRoutes(r *gin.Engine) {
 			rooms.DELETE("/:id", middleware.CheckRoomOwner(), controllers.DeleteRoom)                  //16
 			rooms.POST("/:id/password", middleware.CheckRoomOwner(), controllers.SetRoomPassword)      //17
 			rooms.DELETE("/:id/password", middleware.CheckRoomOwner(), controllers.RemoveRoomPassword) //18
-			forms.POST("/:id/share", middleware.CheckFormOwner(), controllers.CreateFormShare)         //20
+			rooms.POST("/:id/share", middleware.CheckRoomOwner(), controllers.ShareRoom)               // BE-19 Tạo link chia sẻ room
 			rooms.POST("/:id/enter", controllers.EnterRoom)                                            // BE-22 Tham gia room
 
 			rooms.GET("", controllers.ListRooms)
 			rooms.PUT("/:id/archive", middleware.CheckRoomOwner(), controllers.ArchiveRoom)
 			rooms.PUT("/:id/restore", middleware.CheckRoomOwner(), controllers.RestoreRoom)
+			rooms.POST("/:id/addmem", controllers.AddMemberToRoom)                                              // API 22-2
+			rooms.DELETE("/:id/removemem/:memberId", controllers.RemoveMemberFromRoom)                          // API 22-3
+			rooms.GET("/:id/participants", controllers.GetRoomParticipants)                                     // BE-29
+			rooms.POST("/:id/lock", middleware.CheckRoomOwner(), controllers.LockRoom)                          // BE-30
+			rooms.PUT("/:id/unlock", middleware.AuthJWT(), middleware.CheckRoomOwner(), controllers.UnlockRoom) // BE-31
+			rooms.GET("/lobby", controllers.GetLobbyRooms)                                                      //BE21 Lấy danh sách room public (lobby)// Lấy danh sách room lobby (phân trang + tìm kiếm)
+
 		}
-		api.GET("/lobby", controllers.GetLobbyRooms) //BE21 Lấy danh sách room public (lobby)
+
 	}
 }
