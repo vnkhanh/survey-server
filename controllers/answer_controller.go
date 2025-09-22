@@ -491,11 +491,11 @@ func GetFormDashboard(c *gin.Context) {
 				Count  int
 			}
 			db.Raw(`
-				SELECT lua_chon AS option, COUNT(*) AS count
-				FROM cau_tra_loi
-				WHERE cau_hoi_id = ?
-				GROUP BY lua_chon
-			`, q.ID).Scan(&rows)
+		SELECT lua_chon AS option, COUNT(*) AS count
+		FROM cau_tra_loi
+		WHERE cau_hoi_id = ?
+		GROUP BY lua_chon
+	`, q.ID).Scan(&rows)
 
 			// tính tổng để lấy %
 			var total int
@@ -505,8 +505,22 @@ func GetFormDashboard(c *gin.Context) {
 
 			stats := []gin.H{}
 			for _, r := range rows {
+				var parsed []string
+				value := r.Option
+
+				// Thử parse JSON array (["Cam"])
+				if err := json.Unmarshal([]byte(r.Option), &parsed); err == nil {
+					if len(parsed) == 1 {
+						value = parsed[0] // lấy "Cam"
+					} else {
+						// nếu nhiều giá trị, trả luôn cả mảng
+						b, _ := json.Marshal(parsed)
+						value = string(b)
+					}
+				}
+
 				stats = append(stats, gin.H{
-					"option":  r.Option,
+					"option":  value,
 					"count":   r.Count,
 					"percent": float64(r.Count) * 100 / float64(total),
 				})
