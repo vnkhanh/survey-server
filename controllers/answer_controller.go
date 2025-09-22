@@ -475,25 +475,27 @@ func GetFormDashboard(c *gin.Context) {
 	for _, q := range questions {
 		stat := gin.H{
 			"question_id": q.ID,
-			"type":        q.LoaiCauHoi,
+			"type":        strings.ToUpper(q.LoaiCauHoi),
 			"content":     q.NoiDung,
 			"stats":       nil,
 		}
 
-		switch q.LoaiCauHoi {
-		case "single_choice", "multiple_choice", "true_false":
+		switch strings.ToUpper(q.LoaiCauHoi) {
+		// -----------------------------
+		// Các loại câu hỏi chọn đáp án
+		case "SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE":
 			var rows []struct {
 				Option string
 				Count  int
 			}
 			db.Raw(`
-				SELECT noi_dung AS option, COUNT(*) AS count
+				SELECT lua_chon AS option, COUNT(*) AS count
 				FROM cau_tra_loi
 				WHERE cau_hoi_id = ?
-				GROUP BY noi_dung
+				GROUP BY lua_chon
 			`, q.ID).Scan(&rows)
 
-			// tổng để tính %
+			// tính tổng để lấy %
 			var total int
 			for _, r := range rows {
 				total += r.Count
@@ -509,16 +511,18 @@ func GetFormDashboard(c *gin.Context) {
 			}
 			stat["stats"] = stats
 
-		case "rating":
+		// -----------------------------
+		// Rating
+		case "RATING":
 			var rows []struct {
 				Rating int
 				Count  int
 			}
 			db.Raw(`
-				SELECT diem AS rating, COUNT(*) AS count
+				SELECT CAST(noi_dung AS SIGNED) AS rating, COUNT(*) AS count
 				FROM cau_tra_loi
 				WHERE cau_hoi_id = ?
-				GROUP BY diem
+				GROUP BY CAST(noi_dung AS SIGNED)
 				ORDER BY rating
 			`, q.ID).Scan(&rows)
 
@@ -548,7 +552,9 @@ func GetFormDashboard(c *gin.Context) {
 				"histogram": stats,
 			}
 
-		case "fill_blank":
+		// -----------------------------
+		// Điền văn bản
+		case "FILL_BLANK":
 			var rows []struct {
 				Answer string
 				Count  int
@@ -569,15 +575,18 @@ func GetFormDashboard(c *gin.Context) {
 			}
 			stat["stats"] = stats
 
-		case "upload_file":
+		// -----------------------------
+		// Upload file
+		case "UPLOAD_FILE":
 			var rows []struct {
-				UserID uint
+				UserID *uint
 				File   string
 			}
 			db.Raw(`
 				SELECT nguoi_dung_id AS user_id, noi_dung AS file
 				FROM cau_tra_loi
 				WHERE cau_hoi_id = ?
+				AND noi_dung <> ''
 			`, q.ID).Scan(&rows)
 
 			files := []gin.H{}
