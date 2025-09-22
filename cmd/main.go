@@ -19,13 +19,17 @@ func main() {
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"http://localhost:5173"},
-		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		MaxAge:           12 * time.Hour,
+    AllowOriginFunc: func(origin string) bool {
+        // Cho phép cả localhost lẫn github pages
+        return origin == "http://localhost:5173" || origin == "https://nguyendautoan.github.io"
+    },
+    AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+    AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+    ExposeHeaders:    []string{"Content-Length"},
+    AllowCredentials: true,
+    MaxAge:           12 * time.Hour,
 	}))
+
 
 	// Route test server
 	r.GET("/", func(c *gin.Context) {
