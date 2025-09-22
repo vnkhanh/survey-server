@@ -43,7 +43,7 @@ func AuthJWT() gin.HandlerFunc {
 
 		// Inject vào context
 		c.Set(CtxUser, user)
-        c.Set(CtxUserPublic, gin.H{
+		c.Set(CtxUserPublic, gin.H{
 			"id":       user.ID,
 			"ten":      user.Ten,
 			"email":    user.Email,
@@ -67,6 +67,38 @@ func RequireAdmin() gin.HandlerFunc {
 		if !u.VaiTro {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"message": "Forbidden"})
 			return
+		}
+		c.Next()
+	}
+}
+
+// OptionalAuth: nếu có JWT thì inject user, nếu không thì cho qua
+func OptionalAuth() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" || !strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			// Không có token -> cho qua
+			c.Next()
+			return
+		}
+
+		rawToken := strings.TrimSpace(authHeader[7:])
+		claims, err := utils.VerifyToken(rawToken)
+		if err != nil {
+			// Token sai -> bỏ qua như chưa có
+			c.Next()
+			return
+		}
+
+		uid, err := strconv.ParseUint(claims.UserID, 10, 64)
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		var user models.NguoiDung
+		if err := config.DB.First(&user, uid).Error; err == nil {
+			c.Set(CtxUser, user)
 		}
 		c.Next()
 	}
