@@ -14,8 +14,6 @@ services:
       DB_NAME: survey_db
       JWT_SECRET: supersecretkey_1234567
       GOOGLE_CLIENT_ID: 232923029113-4qmipgl9dlonv1p6t7i0vbgu2l7j2cpn.apps.googleusercontent.com
-      SUPABASE_URL: https://ejfdickbdcvgsgsawgvm.supabase.co
-      SUPABASE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVqZmRpY2tiZGN2Z3Nnc2F3Z3ZtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODM3MDQyMiwiZXhwIjoyMDYzOTQ2NDIyfQ.XpZXj5AfTa_lON_lC5EHhiXN-fsIUgM-upMgA1_OqhA
     depends_on:
       db:
         condition: service_healthy
