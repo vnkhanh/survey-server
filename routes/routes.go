@@ -48,7 +48,12 @@ func SetupRoutes(r *gin.Engine) {
 			forms.POST("/:id/questions", middleware.CheckFormEditor(), controllers.AddQuestion)             // BE-05
 			forms.PUT("/:id/questions/reorder", middleware.CheckFormEditor(), controllers.ReorderQuestions) // BE-08
 			forms.PUT("/:id/settings", middleware.CheckFormEditor(), controllers.UpdateFormSettings)        // BE-09
+
+			forms.GET("/:id/submissions", controllers.GetSubmissions) //BE-25
+			forms.GET("/:id/submissions/:sub_id", controllers.GetSubmissionDetail)
+			forms.GET("/:id/dashboard", controllers.GetFormDashboard)
 		}
+		api.POST("/uploads", controllers.UploadFile)
 
 		api.PUT("/questions/:id", middleware.CheckQuestionEditor(), controllers.UpdateQuestion)    // BE-06
 		api.DELETE("/questions/:id", middleware.CheckQuestionEditor(), controllers.DeleteQuestion) // BE-07
@@ -71,8 +76,8 @@ func SetupRoutes(r *gin.Engine) {
 			rooms.PUT("/:id/archive", middleware.CheckRoomOwner(), controllers.ArchiveRoom)
 			rooms.PUT("/:id/restore", middleware.CheckRoomOwner(), controllers.RestoreRoom)
 		}
-		api.GET("/lobby", controllers.GetLobbyRooms) //BE21 Lấy danh sách room public (lobby)
-		api.POST("/forms/:id/submissions", middleware.OptionalAuth(), controllers.SubmitSurvey)
+		api.GET("/lobby", controllers.GetLobbyRooms)                                            //BE21 Lấy danh sách room public (lobby)
+		api.POST("/forms/:id/submissions", middleware.OptionalAuth(), controllers.SubmitSurvey) //BE-23
 
 	}
 }
