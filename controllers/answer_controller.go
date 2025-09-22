@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"strconv"
@@ -519,16 +521,17 @@ func GetFormDashboard(c *gin.Context) {
 				Count  int
 			}
 			db.Raw(`
-				SELECT CAST(noi_dung AS SIGNED) AS rating, COUNT(*) AS count
+				SELECT noi_dung::INTEGER AS rating, COUNT(*) AS count
 				FROM cau_tra_loi
-				WHERE cau_hoi_id = ?
-				GROUP BY CAST(noi_dung AS SIGNED)
-				ORDER BY rating
+				WHERE cau_hoi_id = $1
+				AND noi_dung IS NOT NULL
+				AND noi_dung <> ''
+				GROUP BY noi_dung::INTEGER
+				ORDER BY rating;
 			`, q.ID).Scan(&rows)
 
-			var sum, total, min, max int
-			min = 6
-			max = 0
+			var sum, total int
+			min, max := math.MaxInt, 0
 			stats := []gin.H{}
 			for _, r := range rows {
 				stats = append(stats, gin.H{"rating": r.Rating, "count": r.Count})
@@ -541,15 +544,16 @@ func GetFormDashboard(c *gin.Context) {
 					max = r.Rating
 				}
 			}
-			avg := 0.0
-			if total > 0 {
-				avg = float64(sum) / float64(total)
-			}
-			stat["stats"] = gin.H{
-				"avg":       avg,
-				"min":       min,
-				"max":       max,
-				"histogram": stats,
+
+			if total == 0 {
+				stat["stats"] = gin.H{"avg": 0, "min": 0, "max": 0, "histogram": []gin.H{}}
+			} else {
+				stat["stats"] = gin.H{
+					"avg":       float64(sum) / float64(total),
+					"min":       min,
+					"max":       max,
+					"histogram": stats,
+				}
 			}
 
 		// -----------------------------
@@ -579,21 +583,23 @@ func GetFormDashboard(c *gin.Context) {
 		// Upload file
 		case "UPLOAD_FILE":
 			var rows []struct {
-				UserID *uint
-				File   string
+				UserID sql.NullInt64
+				File   sql.NullString
 			}
 			db.Raw(`
-				SELECT nguoi_dung_id AS user_id, noi_dung AS file
-				FROM cau_tra_loi
-				WHERE cau_hoi_id = ?
-				AND noi_dung <> ''
+				SELECT ph.nguoi_dung_id AS user_id, ctl.noi_dung AS file
+				FROM cau_tra_loi ctl
+				JOIN phan_hoi ph ON ctl.phan_hoi_id = ph.id
+				WHERE ctl.cau_hoi_id = $1
+				AND ctl.noi_dung IS NOT NULL
+				AND ctl.noi_dung <> '';
 			`, q.ID).Scan(&rows)
 
 			files := []gin.H{}
 			for _, r := range rows {
 				files = append(files, gin.H{
-					"user_id": r.UserID,
-					"file":    r.File,
+					"user_id": r.UserID.Int64,
+					"file":    r.File.String,
 				})
 			}
 			stat["stats"] = files
