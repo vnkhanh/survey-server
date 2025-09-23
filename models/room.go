@@ -17,6 +17,7 @@ type Room struct {
 	ShareURL    string    `gorm:"column:share_url;size:255" json:"share_url"`
 
 	ThamGias []RoomNguoiThamGia `gorm:"foreignKey:RoomID" json:"-"`
+	IsLocked bool               `gorm:"column:is_locked;default:false" json:"is_locked"`
 }
 
 func (Room) TableName() string {
