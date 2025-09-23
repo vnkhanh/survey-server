@@ -48,7 +48,7 @@ func SetupRoutes(r *gin.Engine) {
 			forms.POST("/:id/questions", middleware.CheckFormEditor(), controllers.AddQuestion)             // BE-05
 			forms.PUT("/:id/questions/reorder", middleware.CheckFormEditor(), controllers.ReorderQuestions) // BE-08
 			forms.PUT("/:id/settings", middleware.CheckFormEditor(), controllers.UpdateFormSettings)        // BE-09
-
+			forms.GET("/my", controllers.GetMyForms)                                  // 🔥 mới thêm - Lấy form của chính user
 			forms.GET("/:id/submissions", controllers.GetSubmissions) //BE-25
 			forms.GET("/:id/submissions/:sub_id", controllers.GetSubmissionDetail)
 			forms.GET("/:id/dashboard", controllers.GetFormDashboard)

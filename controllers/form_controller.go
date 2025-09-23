@@ -455,3 +455,38 @@ func CreateFormShare(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"share_url": publicLink, "embed_code": embedCode})
 }
+// BE-12: Lấy danh sách khảo sát của chính mình
+func GetMyForms(c *gin.Context) {
+	v, ok := c.Get(middleware.CtxUser)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Chưa đăng nhập"})
+		return
+	}
+	user, ok := v.(models.NguoiDung)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "User không hợp lệ"})
+		return
+	}
+
+	var forms []models.KhaoSat
+	if err := config.DB.
+		Where("nguoi_tao_id = ? AND trang_thai <> 'deleted'", user.ID).
+		Order("ngay_tao DESC").
+		Find(&forms).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể lấy danh sách"})
+		return
+	}
+
+	out := make([]gin.H, 0, len(forms))
+	for _, f := range forms {
+		out = append(out, gin.H{
+			"id":          f.ID,
+			"title":       f.TieuDe,
+			"description": f.MoTa,
+			"status":      f.TrangThai,
+			"created_at":  f.NgayTao,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"forms": out})
+}
+
