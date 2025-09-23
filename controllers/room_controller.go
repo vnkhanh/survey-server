@@ -573,8 +573,12 @@ func GetRoomParticipants(c *gin.Context) {
 		return
 	}
 
+	isPublic := true
+	if room.IsPublic != nil {
+		isPublic = *room.IsPublic
+	}
 	// Nếu room private, check quyền
-	if !room.IsPublic {
+	if !isPublic {
 		var isParticipant int64
 		config.DB.Model(&models.RoomNguoiThamGia{}).Where("room_id = ? AND nguoi_dung_id = ? AND trang_thai = ?", roomIDUint, user.ID, "active").Count(&isParticipant)
 		if room.NguoiTaoID != nil && *room.NguoiTaoID != user.ID && isParticipant == 0 {
