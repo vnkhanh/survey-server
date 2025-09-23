@@ -79,7 +79,7 @@ func ListRooms(c *gin.Context) {
 	var rooms []models.Room
 	query := config.DB.Model(&models.Room{}).
 		Where("nguoi_tao_id = ?", u.ID). // chỉ lấy room do user này tạo
-		Where("trang_thai != ?", "deleted")
+		 Where("trang_thai != ?", "archived") 
 
 	// filter theo tên (q)
 	if q := c.Query("q"); q != "" {
