@@ -19,19 +19,17 @@ func main() {
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{
-    AllowOriginFunc: func(origin string) bool {
-        return origin == "http://localhost:5173" || origin == "https://nguyendautoan.github.io"
-    },
-    AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-    AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-    ExposeHeaders:    []string{"Content-Length"},
-    AllowCredentials: true,
-    MaxAge:           12 * time.Hour,
-    AllowWildcard:    true, // 👈 quan trọng
-    AllowBrowserExtensions: true,
+		AllowOriginFunc: func(origin string) bool {
+			return origin == "http://localhost:5173" || origin == "https://nguyendautoan.github.io"
+		},
+		AllowMethods:           []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:           []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:          []string{"Content-Length"},
+		AllowCredentials:       true,
+		MaxAge:                 12 * time.Hour,
+		AllowWildcard:          true, // cho phép wildcard domain
+		AllowBrowserExtensions: true, // hỗ trợ extension
 	}))
-
-
 
 	// Route test server
 	r.GET("/", func(c *gin.Context) {
@@ -39,7 +37,7 @@ func main() {
 	})
 
 	if err := r.SetTrustedProxies(nil); err != nil {
-    panic(err)
+		panic(err)
 	}
 
 	// Setup routes khác
