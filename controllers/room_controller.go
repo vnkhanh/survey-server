@@ -551,25 +551,50 @@ func RemoveMemberFromRoom(c *gin.Context) {
 
 // ===== BE-29: Lấy danh sách thành viên trong room =====
 func GetRoomParticipants(c *gin.Context) {
-	roomID := c.Param("id")
-	roomIDUint, err := strconv.ParseUint(roomID, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID room không hợp lệ"})
-		return
-	}
+    roomID := c.Param("id")
+    roomIDUint, err := strconv.ParseUint(roomID, 10, 64)
+    if err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "ID room không hợp lệ"})
+        return
+    }
 
-	var participants []models.RoomNguoiThamGia
-	// Lọc chỉ lấy thành viên active
-	if err := config.DB.Where("room_id = ? AND trang_thai = ?", roomIDUint, "active").Find(&participants).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lấy được danh sách thành viên"})
-		return
-	}
+    // Lấy user từ context
+    userVal, exists := c.Get("user")
+    if !exists {
+        c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+        return
+    }
+    user := userVal.(models.NguoiDung)
 
-	c.JSON(http.StatusOK, gin.H{
-		"room_id":      roomID,
-		"participants": participants,
-	})
+    // Lấy room
+    var room models.Room
+    if err := config.DB.First(&room, roomIDUint).Error; err != nil {
+        c.JSON(http.StatusNotFound, gin.H{"error": "Room không tồn tại"})
+        return
+    }
+
+    // Nếu room private, check quyền
+    if !room.IsPublic {
+        var isParticipant int64
+        config.DB.Model(&models.RoomNguoiThamGia{}).Where("room_id = ? AND nguoi_dung_id = ? AND trang_thai = ?", roomIDUint, user.ID, "active").Count(&isParticipant)
+        if room.NguoiTaoID != nil && *room.NguoiTaoID != user.ID && isParticipant == 0 {
+            c.JSON(http.StatusForbidden, gin.H{"error": "Không có quyền xem danh sách thành viên"})
+            return
+        }
+    }
+
+    var participants []models.RoomNguoiThamGia
+    if err := config.DB.Where("room_id = ? AND trang_thai = ?", roomIDUint, "active").Find(&participants).Error; err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lấy được danh sách thành viên"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{
+        "room_id":      roomID,
+        "participants": participants,
+    })
 }
+
 
 // ===== BE-30: Khóa room =====
 func LockRoom(c *gin.Context) {
