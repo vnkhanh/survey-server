@@ -3,7 +3,9 @@ package controllers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"os"
 	"strconv"
 
 	"github.com/google/uuid"
@@ -442,7 +444,7 @@ func GetFormTheme(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"theme": theme})
 }
 
-// POST /api/forms/:id/share  Admin gọi POST /api/forms/{id}/share → sinh link + embed code .
+// POST /api/forms/:id/public  Admin gọi POST /api/forms/{id}/public → sinh link + embed code .
 func ShareForm(c *gin.Context) {
 	id := c.Param("id")
 
@@ -453,8 +455,13 @@ func ShareForm(c *gin.Context) {
 	}
 
 	token := uuid.NewString()
-	publicLink := "http://localhost:8080/api/forms/share/" + token
-	embedCode := "<iframe src='" + publicLink + "' width='800' height='600'></iframe>"
+	// lấy base URL từ biến môi trường, fallback localhost nếu chưa có
+	baseURL := os.Getenv("API_BASE_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:8080"
+	}
+	publicLink := fmt.Sprintf("%s/api/forms/public/%s", baseURL, token)
+	embedCode := fmt.Sprintf("<iframe src='%s' width='800' height='600'></iframe>", publicLink)
 
 	form.ShareToken = &token
 	form.PublicLink = &publicLink

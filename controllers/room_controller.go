@@ -585,6 +585,13 @@ func EnterRoom(c *gin.Context) {
 // ===== API 22-2: Thêm thành viên vào room =====
 // ✅ Gửi lời mời
 func InviteUserToRoom(c *gin.Context) {
+	userVal, exists := c.Get(middleware.CtxUser)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Không tìm thấy user trong context"})
+		return
+	}
+	u := userVal.(models.NguoiDung)
+
 	roomID := c.Param("id")
 
 	var body struct {
@@ -622,6 +629,7 @@ func InviteUserToRoom(c *gin.Context) {
 		RoomID:    room.ID,
 		UserID:    body.UserID,
 		Email:     body.Email,
+		InviterID: u.ID,
 		Status:    "pending",
 		CreatedAt: time.Now(),
 	}
@@ -629,7 +637,7 @@ func InviteUserToRoom(c *gin.Context) {
 	if err := config.DB.Create(&invite).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":    "Không thể gửi lời mời",
-			"db_error": err.Error(), // in chi tiết lỗi DB
+			"db_error": err.Error(),
 		})
 		return
 	}
@@ -667,8 +675,6 @@ func ListRoomInvites(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"invites": invites})
 }
-
-
 
 // ✅ 3. Người dùng phản hồi lời mời (accept / reject)
 func RespondToInvite(c *gin.Context) {

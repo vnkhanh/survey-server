@@ -8,6 +8,7 @@ type RoomInvite struct {
 	UserID    uint      `gorm:"not null" json:"user_id"`
 	Email     string    `gorm:"size:255;not null" json:"email"`
 	Status    string    `gorm:"size:20;default:'pending'" json:"status"` // pending | accepted | rejected
+	InviterID uint      `gorm:"not null" json:"inviter_id"`              // ai gửi lời mời
 	CreatedAt time.Time `json:"created_at"`
 }
 
