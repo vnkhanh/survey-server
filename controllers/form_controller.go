@@ -443,17 +443,17 @@ func GetFormTheme(c *gin.Context) {
 }
 
 // POST /api/forms/:id/share  Admin gọi POST /api/forms/{id}/share → sinh link + embed code .
-func CreateFormShare(c *gin.Context) {
+func ShareForm(c *gin.Context) {
 	id := c.Param("id")
 
 	var form models.KhaoSat
-	if err := config.DB.First(&form, id).Error; err != nil {
+	if err := config.DB.First(&form, "id = ?", id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"message": "Form không tồn tại"})
 		return
 	}
 
 	token := uuid.NewString()
-	publicLink := "https://survey-server.com/forms/" + token
+	publicLink := "http://localhost:8080/api/forms/share/" + token
 	embedCode := "<iframe src='" + publicLink + "' width='800' height='600'></iframe>"
 
 	form.ShareToken = &token
@@ -466,12 +466,13 @@ func CreateFormShare(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
+		"message":    "Tạo share link thành công",
 		"share_url":  publicLink,
 		"embed_code": embedCode,
 	})
 }
 
-// GET /api/forms/:public/shareToken
+// GET /api/forms/share/:shareToken
 func GetPublicForm(c *gin.Context) {
 	token := c.Param("shareToken")
 
@@ -481,7 +482,7 @@ func GetPublicForm(c *gin.Context) {
 		return
 	}
 
-	// Kiểm tra giới hạn số lần trả lời
+	// Nếu có giới hạn số lần trả lời thì check
 	if form.GioiHanTL != nil && form.SoLanTraLoi >= *form.GioiHanTL {
 		c.JSON(http.StatusForbidden, gin.H{"message": "Đã đạt giới hạn số lần trả lời"})
 		return
@@ -494,6 +495,7 @@ func GetPublicForm(c *gin.Context) {
 		return
 	}
 
+	// Trả kết quả JSON
 	c.JSON(http.StatusOK, gin.H{
 		"id":             form.ID,
 		"tieu_de":        form.TieuDe,
@@ -575,6 +577,7 @@ func CloneForm(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "Clone form thành công", "data": newForm})
 }
+
 // BE-12: Lấy danh sách khảo sát của chính mình
 func GetMyForms(c *gin.Context) {
 	v, ok := c.Get(middleware.CtxUser)
@@ -609,4 +612,3 @@ func GetMyForms(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"forms": out})
 }
-
