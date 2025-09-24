@@ -95,11 +95,14 @@ func SetupRoutes(r *gin.Engine) {
 			rooms.GET("/:id/participants", controllers.GetRoomParticipants)                                     // BE-29
 			rooms.POST("/:id/lock", middleware.CheckRoomOwner(), controllers.LockRoom)                          // BE-30
 			rooms.PUT("/:id/unlock", middleware.AuthJWT(), middleware.CheckRoomOwner(), controllers.UnlockRoom) // BE-31
-			rooms.GET("/lobby", controllers.GetLobbyRooms)                                                      //BE21 Lấy danh sách room public (lobby)// Lấy danh sách room lobby (phân trang + tìm kiếm)
+			rooms.GET("/lobby", controllers.GetLobbyRooms)  
+			rooms.GET("/archived", controllers.GetArchivedRooms)
+//BE21 Lấy danh sách room public (lobby)// Lấy danh sách room lobby (phân trang + tìm kiếm)
 
 		}
 		api.GET("/lobby", controllers.GetLobbyRooms)                                            //BE21 Lấy danh sách room public (lobby)
-		api.POST("/forms/:id/submissions", middleware.OptionalAuth(), controllers.SubmitSurvey) //BE-23
+		api.POST("/forms/:id/submissions", middleware.OptionalAuth(), controllers.SubmitSurvey)
+		//BE-23
 
 	}
 }
