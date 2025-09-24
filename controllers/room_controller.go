@@ -370,7 +370,7 @@ func RemoveRoomPassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Đã gỡ mật khẩu Room", "data": room})
 }
 
-// ShareRoom - BE-23: Tạo short link chia sẻ Room
+// ShareRoom - BE-20: Tạo short link chia sẻ Room
 func ShareRoom(c *gin.Context) {
 	// Lấy id room từ param
 	roomID := c.Param("id")
@@ -404,6 +404,24 @@ func ShareRoom(c *gin.Context) {
 			"is_public":  room.IsPublic,
 			"trang_thai": room.TrangThai,
 		},
+	})
+}
+func GetRoomByShareURL(c *gin.Context) {
+	shareURL := c.Param("shareURL")
+
+	var room models.Room
+	if err := config.DB.Preload("Members").
+		First(&room, "share_url = ?", shareURL).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Room không tồn tại hoặc chưa share"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":        room.ID,
+		"ten_room":  room.TenRoom,
+		"mo_ta":     room.MoTa,
+		"share_url": room.ShareURL,
+		"members":   room.Members,
 	})
 }
 
