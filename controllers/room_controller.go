@@ -263,22 +263,34 @@ func RestoreRoom(c *gin.Context) {
 
 // BE-luu: Lấy danh sách room đã lưu trữ
 func GetArchivedRooms(c *gin.Context) {
-	var rooms []models.Room
+	// Lấy user_id từ context (Auth middleware đã gán)
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Chưa đăng nhập"})
+		return
+	}
+
+	userID, ok := userIDInterface.(uint)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Lỗi kiểu dữ liệu user_id"})
+		return
+	}
 
 	// Lấy query param page & limit
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
-	if page < 1 {
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
 		page = 1
 	}
-	if limit <= 0 {
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if err != nil || limit <= 0 {
 		limit = 10
 	}
 	offset := (page - 1) * limit
 
-	// Query room archived + preload members
+	// Query room archived của user + preload members
+	var rooms []models.Room
 	query := config.DB.Model(&models.Room{}).
-		Where("trang_thai = ?", "archived").
+		Where("trang_thai = ? AND nguoi_tao_id = ?", "archived", userID).
 		Preload("Members")
 
 	// Đếm tổng số room
@@ -312,6 +324,7 @@ func GetArchivedRooms(c *gin.Context) {
 		"totalPages": totalPages,
 	})
 }
+
 
 // BE-17: đặt khoá room
 func SetRoomPassword(c *gin.Context) {
