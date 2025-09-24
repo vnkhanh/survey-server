@@ -456,6 +456,7 @@ func GetLobbyRooms(c *gin.Context) {
 			"trang_thai":   room.TrangThai,
 			"member_count": len(room.Members),
 			"members":      room.Members,
+			"is_public": room.IsPublic,
 		})
 	}
 
