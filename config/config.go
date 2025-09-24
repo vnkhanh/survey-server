@@ -47,13 +47,13 @@ func ConnectDB() {
 		Logger: logger.Default.LogMode(logger.Warn), // log cảnh báo/lỗi
 	})
 	if err != nil {
-		log.Fatalf("❌ Failed to connect database: %v", err)
+		log.Fatalf("Failed to connect database: %v", err)
 	}
 
 	// Connection pool
 	sqlDB, err := db.DB()
 	if err != nil {
-		log.Fatalf("❌ Failed to get sql.DB from gorm: %v", err)
+		log.Fatalf("Failed to get sql.DB from gorm: %v", err)
 	}
 	sqlDB.SetMaxIdleConns(10)
 	sqlDB.SetMaxOpenConns(100)

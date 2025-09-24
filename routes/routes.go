@@ -36,6 +36,7 @@ func SetupRoutes(r *gin.Engine) {
 		}
 		forms := api.Group("/forms")
 		{
+			forms.Use(middleware.AuthJWT())
 			forms.POST("", middleware.RateLimitFormsCreate(), controllers.CreateForm) // BE-01
 			forms.GET("/:id", controllers.GetFormDetail)                              // BE-02
 			forms.GET("/:id/settings", controllers.GetFormSettings)                   // BE-10
@@ -52,9 +53,14 @@ func SetupRoutes(r *gin.Engine) {
 			// Lấy form public theo shareToken
 			forms.GET("/public/:shareToken", controllers.GetPublicForm) // BE-20
 
-			forms.PATCH("/:id/limit", controllers.UpdateFormLimit) // API cập nhật giới hạn trả lời
-			forms.POST("/:id/clone", controllers.CloneForm)        // Clone form (bao gồm câu hỏi + lựa chọn) // BE-32
+			forms.PATCH("/:id/limit", controllers.UpdateFormLimit)    // API cập nhật giới hạn trả lời
+			forms.POST("/:id/clone", controllers.CloneForm)           // Clone form (bao gồm câu hỏi + lựa chọn) // BE-32
+			forms.GET("/my", controllers.GetMyForms)                  // mới thêm - Lấy form của chính user
+			forms.GET("/:id/submissions", controllers.GetSubmissions) //BE-25
+			forms.GET("/:id/submissions/:sub_id", controllers.GetSubmissionDetail)
+			forms.GET("/:id/dashboard", controllers.GetFormDashboard)
 		}
+		api.POST("/uploads", controllers.UploadFile)
 
 		api.PUT("/questions/:id", middleware.CheckQuestionEditor(), controllers.UpdateQuestion)    // BE-06
 		api.DELETE("/questions/:id", middleware.CheckQuestionEditor(), controllers.DeleteQuestion) // BE-07
@@ -92,6 +98,8 @@ func SetupRoutes(r *gin.Engine) {
 			rooms.GET("/lobby", controllers.GetLobbyRooms)                                                      //BE21 Lấy danh sách room public (lobby)// Lấy danh sách room lobby (phân trang + tìm kiếm)
 
 		}
+		api.GET("/lobby", controllers.GetLobbyRooms)                                            //BE21 Lấy danh sách room public (lobby)
+		api.POST("/forms/:id/submissions", middleware.OptionalAuth(), controllers.SubmitSurvey) //BE-23
 
 	}
 }
