@@ -130,3 +130,24 @@ func GoogleLoginHandler(c *gin.Context) {
 		},
 	})
 }
+func GetUserByEmail(c *gin.Context) {
+	email := c.Query("email")
+	if email == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Thiếu email"})
+		return
+	}
+
+	var user models.NguoiDung
+	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy user"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"user": gin.H{
+			"id":    user.ID,
+			"ten":   user.Ten,
+			"email": user.Email,
+		},
+	})
+}
