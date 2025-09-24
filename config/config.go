@@ -69,6 +69,7 @@ func ConnectDB() {
 		&models.PhanHoi{},
 		&models.Room{},
 		&models.RoomNguoiThamGia{},
+		&models.RoomInvite{}, // 👈 thêm model mới ở đây
 	); err != nil {
 		log.Fatalf("Failed to migrate: %v", err)
 	}

@@ -64,7 +64,14 @@ func SetupRoutes(r *gin.Engine) {
 
 		api.PUT("/questions/:id", middleware.CheckQuestionEditor(), controllers.UpdateQuestion)    // BE-06
 		api.DELETE("/questions/:id", middleware.CheckQuestionEditor(), controllers.DeleteQuestion) // BE-07
-
+		//invites
+		roomInvites := api.Group("/room-invites")
+		{
+			roomInvites.POST("/:id/invite", controllers.InviteUserToRoom)      // gửi lời mời
+			roomInvites.GET("/:id/invites", controllers.ListRoomInvites)       // danh sách lời mời
+			roomInvites.PUT("/:inviteID/respond", controllers.RespondToInvite) // accept / reject
+			roomInvites.DELETE("/:inviteID", controllers.DeleteInvite)         // xóa lời mời
+		}
 		// BE-12 - 17: room
 		rooms := api.Group("/rooms")
 		rooms.Use(middleware.AuthJWT())
@@ -82,8 +89,9 @@ func SetupRoutes(r *gin.Engine) {
 			rooms.GET("", controllers.ListRooms)
 			rooms.PUT("/:id/archive", middleware.CheckRoomOwner(), controllers.ArchiveRoom)
 			rooms.PUT("/:id/restore", middleware.CheckRoomOwner(), controllers.RestoreRoom)
-			rooms.POST("/:id/addmem", controllers.AddMemberToRoom)                                              // API 22-2
-			rooms.DELETE("/:id/removemem/:memberId", controllers.RemoveMemberFromRoom)                          // API 22-3
+			// API 22-2
+			rooms.DELETE("/:id/removemem/:memberId", controllers.RemoveMemberFromRoom)
+			// API 22-3
 			rooms.GET("/:id/participants", controllers.GetRoomParticipants)                                     // BE-29
 			rooms.POST("/:id/lock", middleware.CheckRoomOwner(), controllers.LockRoom)                          // BE-30
 			rooms.PUT("/:id/unlock", middleware.AuthJWT(), middleware.CheckRoomOwner(), controllers.UnlockRoom) // BE-31
