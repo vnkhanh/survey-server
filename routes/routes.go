@@ -16,6 +16,10 @@ func SetupRoutes(r *gin.Engine) {
 
 	api := r.Group("/api")
 	{
+		users := api.Group("/users")
+	    {
+	        users.GET("", middleware.AuthJWT(), controllers.GetUserByEmail)
+	    }
 		auth := api.Group("/auth")
 		{
 			auth.POST("/login", controllers.Login)
