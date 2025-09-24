@@ -90,7 +90,7 @@ func GoogleLoginHandler(c *gin.Context) {
 		return
 	}
 
-	// Xác minh id_token với Google
+	// Xác minh ID Token với Google
 	payload, err := idtoken.Validate(context.Background(), req.IDToken, services.GoogleClientID)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
@@ -104,21 +104,40 @@ func GoogleLoginHandler(c *gin.Context) {
 	email, _ := payload.Claims["email"].(string)
 	name, _ := payload.Claims["name"].(string)
 
-	// Tìm user trong DB hoặc tạo mới
+	// Chuẩn hóa email
+	email = strings.TrimSpace(strings.ToLower(email))
+
+	// Tìm user trong DB
 	var user models.NguoiDung
-	if err := config.DB.Where("email = ?", email).First(&user).Error; err != nil {
-		user = models.NguoiDung{
-			Ten:     name,
-			Email:   email,
-			VaiTro:  false,
-			NgayTao: time.Now(),
+	result := config.DB.Where("email = ?", email).First(&user)
+
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			// Chưa có user -> tạo mới
+			user = models.NguoiDung{
+				Ten:     name,
+				Email:   email,
+				VaiTro:  false,
+				NgayTao: time.Now(),
+			}
+			if err := config.DB.Create(&user).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"message": "Không tạo được user", "error": err.Error()})
+				return
+			}
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Lỗi DB", "error": result.Error.Error()})
+			return
 		}
-		config.DB.Create(&user)
 	}
 
 	// Sinh JWT của hệ thống
-	token, _ := utils.GenerateToken(strconv.FormatUint(uint64(user.ID), 10), "user")
+	token, err := utils.GenerateToken(strconv.FormatUint(uint64(user.ID), 10), "user")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không tạo được token"})
+		return
+	}
 
+	// Trả về frontend
 	c.JSON(http.StatusOK, gin.H{
 		"token": token,
 		"user": gin.H{
@@ -130,3 +149,4 @@ func GoogleLoginHandler(c *gin.Context) {
 		},
 	})
 }
+
