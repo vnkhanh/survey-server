@@ -624,16 +624,28 @@ func InviteUserToRoom(c *gin.Context) {
 
 // ✅ 2. Xem danh sách lời mời trong room
 func ListRoomInvites(c *gin.Context) {
+	// Lấy user từ context
+	userVal, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	user := userVal.(models.NguoiDung)
+
 	roomID := c.Param("id")
 
 	var invites []models.RoomInvite
-	if err := config.DB.Where("room_id = ?", roomID).Find(&invites).Error; err != nil {
+	// Chỉ lấy lời mời trong room cho user hiện tại
+	if err := config.DB.
+		Where("room_id = ? AND user_id = ?", roomID, user.ID).
+		Find(&invites).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lấy được danh sách lời mời"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"invites": invites})
 }
+
 
 // ✅ 3. Người dùng phản hồi lời mời (accept / reject)
 func RespondToInvite(c *gin.Context) {
