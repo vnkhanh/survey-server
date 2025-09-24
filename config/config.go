@@ -70,6 +70,7 @@ func ConnectDB() {
 		&models.Room{},
 		&models.RoomNguoiThamGia{},
 		&models.RoomInvite{},
+		&models.ExportJob{},
 	); err != nil {
 		log.Fatalf("Failed to migrate: %v", err)
 	}

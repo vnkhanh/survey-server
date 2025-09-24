@@ -63,8 +63,10 @@ func SetupRoutes(r *gin.Engine) {
 			forms.GET("/:id/submissions", controllers.GetSubmissions) //BE-25
 			forms.GET("/:id/submissions/:sub_id", controllers.GetSubmissionDetail)
 			forms.GET("/:id/dashboard", controllers.GetFormDashboard)
+			forms.POST("/:id/export", middleware.CheckFormEditor(), controllers.CreateExport)
 		}
 		api.POST("/uploads", controllers.UploadFile)
+		api.GET("/exports/:job_id", middleware.AuthJWT(), controllers.GetExport)
 
 		api.PUT("/questions/:id", middleware.CheckQuestionEditor(), controllers.UpdateQuestion)    // BE-06
 		api.DELETE("/questions/:id", middleware.CheckQuestionEditor(), controllers.DeleteQuestion) // BE-07
