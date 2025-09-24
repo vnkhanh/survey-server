@@ -263,22 +263,28 @@ func RestoreRoom(c *gin.Context) {
 
 // BE-luu: Lấy danh sách room đã lưu trữ
 func GetArchivedRooms(c *gin.Context) {
-	var rooms []models.Room
+	userVal, exists := c.Get(middleware.CtxUser)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Không tìm thấy user trong context"})
+		return
+	}
+	u := userVal.(models.NguoiDung)
 
 	// Lấy query param page & limit
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
-	if page < 1 {
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
 		page = 1
 	}
-	if limit <= 0 {
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	if err != nil || limit <= 0 {
 		limit = 10
 	}
 	offset := (page - 1) * limit
 
-	// Query room archived + preload members
+	// Query room archived của user + preload members
+	var rooms []models.Room
 	query := config.DB.Model(&models.Room{}).
-		Where("trang_thai = ?", "archived").
+		Where("trang_thai = ? AND nguoi_tao_id = ?", "archived", u.ID).
 		Preload("Members")
 
 	// Đếm tổng số room
@@ -474,6 +480,7 @@ func GetLobbyRooms(c *gin.Context) {
 			"trang_thai":   room.TrangThai,
 			"member_count": len(room.Members),
 			"members":      room.Members,
+			"is_public":    room.IsPublic,
 		})
 	}
 
@@ -635,16 +642,28 @@ func InviteUserToRoom(c *gin.Context) {
 
 // ✅ 2. Xem danh sách lời mời trong room
 func ListRoomInvites(c *gin.Context) {
+	// Lấy user từ context
+	userVal, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	user := userVal.(models.NguoiDung)
+
 	roomID := c.Param("id")
 
 	var invites []models.RoomInvite
-	if err := config.DB.Where("room_id = ?", roomID).Find(&invites).Error; err != nil {
+	// Chỉ lấy lời mời trong room cho user hiện tại
+	if err := config.DB.
+		Where("room_id = ? AND user_id = ?", roomID, user.ID).
+		Find(&invites).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lấy được danh sách lời mời"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"invites": invites})
 }
+
 
 // ✅ 3. Người dùng phản hồi lời mời (accept / reject)
 func RespondToInvite(c *gin.Context) {
