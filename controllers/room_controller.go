@@ -642,7 +642,6 @@ func InviteUserToRoom(c *gin.Context) {
 
 // ✅ 2. Xem danh sách lời mời trong room
 func ListRoomInvites(c *gin.Context) {
-	// Lấy user từ context
 	userVal, exists := c.Get("user")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -650,12 +649,17 @@ func ListRoomInvites(c *gin.Context) {
 	}
 	user := userVal.(models.NguoiDung)
 
-	roomID := c.Param("id")
+	roomIDStr := c.Param("id")
+	roomIDInt, err := strconv.Atoi(roomIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Room ID không hợp lệ"})
+		return
+	}
+	roomID := uint(roomIDInt)
 
 	var invites []models.RoomInvite
-	// Chỉ lấy lời mời trong room cho user hiện tại
 	if err := config.DB.
-		Where("room_id = ? AND user_id = ?", roomID, user.ID).
+		Where("room_id = ? AND email = ?", roomID, user.Email).
 		Find(&invites).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lấy được danh sách lời mời"})
 		return
@@ -663,6 +667,7 @@ func ListRoomInvites(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"invites": invites})
 }
+
 
 
 // ✅ 3. Người dùng phản hồi lời mời (accept / reject)
