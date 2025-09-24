@@ -506,7 +506,7 @@ func EnterRoom(c *gin.Context) {
 	}
 
 	// Lấy user từ context
-	userVal, exists := c.Get("user")
+	userVal, exists := c.Get(middleware.CtxUser)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
@@ -642,7 +642,7 @@ func InviteUserToRoom(c *gin.Context) {
 
 // ✅ 2. Xem danh sách lời mời trong room
 func ListRoomInvites(c *gin.Context) {
-	userVal, exists := c.Get("user")
+	userVal, exists := c.Get(middleware.CtxUser)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
 		return
