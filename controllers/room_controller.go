@@ -261,7 +261,6 @@ func RestoreRoom(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Room đã được khôi phục", "data": room})
 }
 
-/*
 // BE-luu: Lấy danh sách room đã lưu trữ
 func GetArchivedRooms(c *gin.Context) {
 	var rooms []models.Room
@@ -313,7 +312,7 @@ func GetArchivedRooms(c *gin.Context) {
 		"totalPages": totalPages,
 	})
 }
-*/
+
 // BE-17: đặt khoá room
 func SetRoomPassword(c *gin.Context) {
 	// roomObj đã được middleware.CheckRoomOwner nạp vào context
