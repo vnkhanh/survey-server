@@ -73,7 +73,7 @@ func SetupRoutes(r *gin.Engine) {
 		//invites
 		roomInvites := api.Group("/room-invites")
 		{
-			roomInvites.POST("/:id/invite", controllers.InviteUserToRoom)      // gửi lời mời
+			roomInvites.POST("/:id/invite", middleware.AuthJWT(), controllers.InviteUserToRoom) // gửi lời mời
 			roomInvites.GET("/:id/invites", middleware.AuthJWT(), controllers.ListRoomInvites)
 			roomInvites.PUT("/:inviteID/respond", controllers.RespondToInvite) // accept / reject
 			roomInvites.DELETE("/:inviteID", controllers.DeleteInvite)         // xóa lời mời
