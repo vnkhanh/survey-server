@@ -667,10 +667,10 @@ func ListRoomInvites(c *gin.Context) {
 
 	var invites []models.RoomInvite
 	if err := config.DB.
-		Where("room_id = ? AND email = ?", roomID, user.Email).
-		Find(&invites).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lấy được danh sách lời mời"})
-		return
+	    Where("room_id = ? AND user_id = ? AND status = ?", roomID, user.ID, "pending").
+	    Find(&invites).Error; err != nil {
+	    c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lấy được danh sách lời mời"})
+	    return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"invites": invites})
