@@ -53,7 +53,7 @@ func SetupRoutes(r *gin.Engine) {
 			forms.PUT("/:id/questions/reorder", middleware.CheckFormEditor(), controllers.ReorderQuestions) // BE-08
 			forms.PUT("/:id/settings", middleware.CheckFormEditor(), controllers.UpdateFormSettings)        // BE-09
 			// Tạo link chia sẻ form
-			forms.POST("/:id/share", controllers.CreateFormShare) // BE-20
+			forms.POST("/:id/share", middleware.CheckFormOwner(), controllers.ShareForm)
 			// Lấy form public theo shareToken
 			forms.GET("/public/:shareToken", controllers.GetPublicForm) // BE-20
 
@@ -87,8 +87,9 @@ func SetupRoutes(r *gin.Engine) {
 			rooms.DELETE("/:id", middleware.CheckRoomOwner(), controllers.DeleteRoom)                  //16
 			rooms.POST("/:id/password", middleware.CheckRoomOwner(), controllers.SetRoomPassword)      //17
 			rooms.DELETE("/:id/password", middleware.CheckRoomOwner(), controllers.RemoveRoomPassword) //18
-			rooms.POST("/:id/share", middleware.CheckRoomOwner(), controllers.ShareRoom)               // BE-19 Tạo link chia sẻ room
-			rooms.POST("/:id/enter", controllers.EnterRoom)                                            // BE-22 Tham gia room
+			rooms.GET("/share/:shareURL", controllers.GetRoomByShareURL)
+			rooms.POST("/:id/share", middleware.CheckRoomOwner(), controllers.ShareRoom) // BE-19 Tạo link chia sẻ room
+			rooms.POST("/:id/enter", controllers.EnterRoom)                              // BE-22 Tham gia room
 
 			rooms.GET("", controllers.ListRooms)
 			rooms.PUT("/:id/archive", middleware.CheckRoomOwner(), controllers.ArchiveRoom)
