@@ -648,7 +648,7 @@ func InviteUserToRoom(c *gin.Context) {
 	})
 }
 
-// ✅ 2. Xem danh sách lời mời trong room
+// 2. Xem danh sách lời mời trong room
 func ListRoomInvites(c *gin.Context) {
 	userVal, exists := c.Get(middleware.CtxUser)
 	if !exists {
@@ -657,26 +657,38 @@ func ListRoomInvites(c *gin.Context) {
 	}
 	user := userVal.(models.NguoiDung)
 
-	roomIDStr := c.Param("id")
-	roomIDInt, err := strconv.Atoi(roomIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Room ID không hợp lệ"})
-		return
+	// Lấy query params
+	roomIDStr := c.Query("room_id") // room_id là tùy chọn
+	status := c.Query("status")     // status là tùy chọn: pending|accepted|rejected
+
+	// Bắt đầu query
+	db := config.DB.Model(&models.RoomInvite{}).Where("user_id = ?", user.ID)
+
+	// Lọc theo room nếu có
+	if roomIDStr != "" {
+		roomIDInt, err := strconv.Atoi(roomIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "room_id không hợp lệ"})
+			return
+		}
+		db = db.Where("room_id = ?", uint(roomIDInt))
 	}
-	roomID := uint(roomIDInt)
+
+	// Lọc theo status nếu có
+	if status != "" {
+		db = db.Where("status = ?", status)
+	}
 
 	var invites []models.RoomInvite
-	if err := config.DB.
-	    Where("room_id = ? AND user_id = ? AND status = ?", roomID, user.ID, "pending").
-	    Find(&invites).Error; err != nil {
-	    c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lấy được danh sách lời mời"})
-	    return
+	if err := db.Find(&invites).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lấy được danh sách lời mời"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"invites": invites})
 }
 
-// ✅ 3. Người dùng phản hồi lời mời (accept / reject)
+// 3. Người dùng phản hồi lời mời (accept / reject)
 func RespondToInvite(c *gin.Context) {
 	inviteID := c.Param("inviteID")
 

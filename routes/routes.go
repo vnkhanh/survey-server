@@ -55,7 +55,6 @@ func SetupRoutes(r *gin.Engine) {
 			// Tạo link chia sẻ form
 			forms.POST("/:id/share", middleware.CheckFormOwner(), controllers.ShareForm)
 			// Lấy form public theo shareToken
-			forms.GET("/public/:shareToken", controllers.GetPublicForm) // BE-20
 
 			forms.PATCH("/:id/limit", controllers.UpdateFormLimit)    // API cập nhật giới hạn trả lời
 			forms.POST("/:id/clone", controllers.CloneForm)           // Clone form (bao gồm câu hỏi + lựa chọn) // BE-32
@@ -65,6 +64,7 @@ func SetupRoutes(r *gin.Engine) {
 			forms.GET("/:id/dashboard", controllers.GetFormDashboard)
 			forms.POST("/:id/export", middleware.CheckFormEditor(), controllers.CreateExport)
 		}
+		api.GET("/forms/public/:shareToken", controllers.GetPublicForm) // BE-20
 		api.POST("/uploads", controllers.UploadFile)
 		api.GET("/exports/:job_id", middleware.AuthJWT(), controllers.GetExport)
 
@@ -74,7 +74,7 @@ func SetupRoutes(r *gin.Engine) {
 		roomInvites := api.Group("/room-invites")
 		{
 			roomInvites.POST("/:id/invite", middleware.AuthJWT(), controllers.InviteUserToRoom) // gửi lời mời
-			roomInvites.GET("/:id/invites", middleware.AuthJWT(), controllers.ListRoomInvites)
+			roomInvites.GET("/invites", middleware.AuthJWT(), controllers.ListRoomInvites)
 			roomInvites.PUT("/:inviteID/respond", controllers.RespondToInvite) // accept / reject
 			roomInvites.DELETE("/:inviteID", controllers.DeleteInvite)         // xóa lời mời
 		}
