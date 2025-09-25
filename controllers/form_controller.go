@@ -484,31 +484,58 @@ func GetPublicForm(c *gin.Context) {
 	token := c.Param("shareToken")
 
 	var form models.KhaoSat
-	if err := config.DB.Where("share_token = ?", token).First(&form).Error; err != nil {
+	if err := config.DB.
+		Where("share_token = ?", token).
+		Preload("CauHois", func(db *gorm.DB) *gorm.DB { return db.Order("thu_tu ASC,id ASC") }).
+		Preload("CauHois.LuaChons", func(db *gorm.DB) *gorm.DB { return db.Order("thu_tu ASC,id ASC") }).
+		First(&form).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"message": "Form không tồn tại"})
 		return
 	}
 
-	// Nếu có giới hạn số lần trả lời thì check
 	if form.GioiHanTL != nil && form.SoLanTraLoi >= *form.GioiHanTL {
 		c.JSON(http.StatusForbidden, gin.H{"message": "Đã đạt giới hạn số lần trả lời"})
 		return
 	}
 
-	// Tăng số lần trả lời
-	form.SoLanTraLoi++
-	if err := config.DB.Save(&form).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể cập nhật số lần trả lời"})
-		return
+	// Không tự động tăng số lần trả lời ở đây nếu chỉ là GET hiển thị
+	// => Chỉ tăng khi người dùng POST câu trả lời.
+
+	// Parse JSON settings/theme
+	var settings, theme interface{}
+	if form.SettingsJSON != "" {
+		_ = json.Unmarshal([]byte(form.SettingsJSON), &settings)
+	}
+	if form.ThemeJSON != "" {
+		_ = json.Unmarshal([]byte(form.ThemeJSON), &theme)
 	}
 
-	// Trả kết quả JSON
+	// Chuẩn bị danh sách câu hỏi
+	out := make([]QuestionDTO, 0, len(form.CauHois))
+	for _, q := range form.CauHois {
+		var props interface{}
+		if q.PropsJSON != "" {
+			_ = json.Unmarshal([]byte(q.PropsJSON), &props)
+		}
+		out = append(out, QuestionDTO{
+			ID:      q.ID,
+			Type:    q.LoaiCauHoi,
+			Content: q.NoiDung,
+			Order:   q.ThuTu,
+			Props:   props,
+			Options: q.LuaChons,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"id":             form.ID,
 		"tieu_de":        form.TieuDe,
 		"mo_ta":          form.MoTa,
-		"so_lan_tra_loi": form.SoLanTraLoi,
 		"gioi_han":       form.GioiHanTL,
+		"so_lan_tra_loi": form.SoLanTraLoi,
+		"settings":       settings,
+		"theme":          theme,
+		"questions":      out,
 	})
 }
 
