@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/vnkhanh/survey-server/config"
+	"github.com/vnkhanh/survey-server/middleware"
 	"github.com/vnkhanh/survey-server/models"
 	"github.com/vnkhanh/survey-server/utils"
 	"gorm.io/gorm"
@@ -105,12 +106,12 @@ func SubmitSurvey(c *gin.Context) {
 
 	// 7. Kiểm tra đăng nhập
 	var userID *uint
-	if u, exists := c.Get("user"); exists {
+	if u, exists := c.Get(middleware.CtxUser); exists {
 		if user, ok := u.(models.NguoiDung); ok {
 			userID = &user.ID
 		}
 	}
-	if settings.RequireLogin && userID == nil {
+	if settings.CollectEmail && userID == nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Khảo sát này yêu cầu đăng nhập"})
 		return
 	}
@@ -129,8 +130,20 @@ func SubmitSurvey(c *gin.Context) {
 		var props struct {
 			Required bool `json:"required"`
 		}
+
 		if q.PropsJSON != "" {
-			if err := json.Unmarshal([]byte(q.PropsJSON), &props); err != nil {
+			raw := q.PropsJSON
+
+			// Nếu props_json là chuỗi JSON (ví dụ "{\"required\":false,...}")
+			// thì cần giải mã thêm 1 lần để ra object thật
+			if strings.HasPrefix(strings.TrimSpace(raw), "\"") {
+				var unescaped string
+				if err := json.Unmarshal([]byte(raw), &unescaped); err == nil {
+					raw = unescaped
+				}
+			}
+
+			if err := json.Unmarshal([]byte(raw), &props); err != nil {
 				log.Printf("Lỗi parse props JSON cho câu hỏi %d: %v", ans.CauHoiID, err)
 			}
 		}
