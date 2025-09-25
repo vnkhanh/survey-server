@@ -794,9 +794,9 @@ func GetRoomParticipants(c *gin.Context) {
 	}
 
 	// Lấy user từ context
-	userVal, exists := c.Get("user")
+	userVal, exists := c.Get(middleware.CtxUser)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "Không tìm thấy user trong context"})
 		return
 	}
 	user := userVal.(models.NguoiDung)
