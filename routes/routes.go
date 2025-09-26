@@ -61,8 +61,7 @@ func SetupRoutes(r *gin.Engine) {
 			forms.GET("/:id/dashboard", controllers.GetFormDashboard)
 			forms.POST("/:id/export", middleware.CheckFormEditor(), controllers.CreateExport)
 		}
-		r.POST("/api/forms/:id/share", controllers.ShareForm)            // public
-		api.GET("/forms/public/:shareToken", controllers.GetPublicForm) // BE-20 ĐỂ YÊN DÒNG NÀY DÙM CÁI
+		api.GET("/forms/public/:shareToken", controllers.GetPublicForm) // BE-20  ĐỂ YÊN ROUTE NÀY NHA KHÔNG ĐỔI GÌ HẾT
 		api.POST("/uploads", controllers.UploadFile)
 		api.GET("/exports/:job_id", middleware.AuthJWT(), controllers.GetExport)
 
