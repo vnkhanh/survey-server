@@ -52,11 +52,8 @@ func SetupRoutes(r *gin.Engine) {
 			forms.POST("/:id/questions", middleware.CheckFormEditor(), controllers.AddQuestion)             // BE-05
 			forms.PUT("/:id/questions/reorder", middleware.CheckFormEditor(), controllers.ReorderQuestions) // BE-08
 			forms.PUT("/:id/settings", middleware.CheckFormEditor(), controllers.UpdateFormSettings)        // BE-09
-			// Tạo link chia sẻ form
-			forms.POST("/:id/share", middleware.CheckFormOwner(), controllers.ShareForm)
-			// Lấy form public theo shareToken
-
-			forms.PATCH("/:id/limit", controllers.UpdateFormLimit)    // API cập nhật giới hạn trả lời
+			// API cập nhật giới hạn trả lời (chỉ owner/admin)
+			//forms.PATCH("/:id/limit", middleware.CheckFormOwner(), controllers.UpdateFormLimit)
 			forms.POST("/:id/clone", controllers.CloneForm)           // Clone form (bao gồm câu hỏi + lựa chọn) // BE-32
 			forms.GET("/my", controllers.GetMyForms)                  // mới thêm - Lấy form của chính user
 			forms.GET("/:id/submissions", controllers.GetSubmissions) //BE-25
@@ -71,13 +68,18 @@ func SetupRoutes(r *gin.Engine) {
 		api.PUT("/questions/:id", middleware.CheckQuestionEditor(), controllers.UpdateQuestion)    // BE-06
 		api.DELETE("/questions/:id", middleware.CheckQuestionEditor(), controllers.DeleteQuestion) // BE-07
 		//invites
-		roomInvites := api.Group("/room-invites")
-		{
-			roomInvites.POST("/:id/invite", middleware.AuthJWT(), controllers.InviteUserToRoom) // gửi lời mời
-			roomInvites.GET("/invites", middleware.AuthJWT(), controllers.ListRoomInvites)
-			roomInvites.PUT("/:inviteID/respond", controllers.RespondToInvite) // accept / reject
-			roomInvites.DELETE("/:inviteID", controllers.DeleteInvite)         // xóa lời mời
+		//roomInvites := api.Group("/room-invites")
+		/*{
+			//roomInvites.POST("/:id/invite", middleware.AuthJWT(), controllers.InviteUserToRoom) // gửi lời mời
+			//roomInvites.GET("/:id/invites", middleware.AuthJWT(), controllers.ListRoomInvites)
+			//roomInvites.PUT("/:inviteID/respond", controllers.RespondToInvite) // accept / reject
+			//roomInvites.DELETE("/:inviteID", controllers.DeleteInvite)         // xóa lời mời
+			//roomInvites.GET("/my", middleware.AuthJWT(), controllers.ListMyInvites)
+			//roomInvites.GET("/my", middleware.FakeAuthMiddleware(), controllers.ListMyInvites)
+			//roomInvites.PUT("/:inviteID/respond", middleware.FakeAuthMiddleware(), controllers.RespondToInvite)
+			//	roomInvites.POST("/fake-create", controllers.CreateFakeInvite)
 		}
+		*/
 		// BE-12 - 17: room
 		rooms := api.Group("/rooms")
 		rooms.Use(middleware.AuthJWT())
@@ -89,9 +91,8 @@ func SetupRoutes(r *gin.Engine) {
 			rooms.DELETE("/:id", middleware.CheckRoomOwner(), controllers.DeleteRoom)                  //16
 			rooms.POST("/:id/password", middleware.CheckRoomOwner(), controllers.SetRoomPassword)      //17
 			rooms.DELETE("/:id/password", middleware.CheckRoomOwner(), controllers.RemoveRoomPassword) //18
-			rooms.GET("/share/:shareURL", controllers.GetRoomByShareURL)
-			rooms.POST("/:id/share", middleware.CheckRoomOwner(), controllers.ShareRoom) // BE-19 Tạo link chia sẻ room
-			rooms.POST("/:id/enter", controllers.EnterRoom)                              // BE-22 Tham gia room
+			//rooms.GET("/share/:shareURL", controllers.GetRoomByShareURL)
+			//rooms.POST("/:id/share", middleware.CheckRoomOwner(), controllers.ShareRoom) // BE-19 Tạo link chia sẻ room
 
 			rooms.GET("", controllers.ListRooms)
 			rooms.PUT("/:id/archive", middleware.CheckRoomOwner(), controllers.ArchiveRoom)
@@ -104,11 +105,20 @@ func SetupRoutes(r *gin.Engine) {
 			rooms.PUT("/:id/unlock", middleware.AuthJWT(), middleware.CheckRoomOwner(), controllers.UnlockRoom) // BE-31
 			rooms.GET("/lobby", controllers.GetLobbyRooms)
 			rooms.GET("/archived", controllers.GetArchivedRooms)
+			// ✅ Tham gia room qua shareURL (cần login)
+
 			//BE21 Lấy danh sách room public (lobby)// Lấy danh sách room lobby (phân trang + tìm kiếm)
 
 		}
 		api.GET("/lobby", controllers.GetLobbyRooms) //BE21 Lấy danh sách room public (lobby)
 		api.POST("/forms/:id/submissions", middleware.OptionalAuth(), controllers.SubmitSurvey)
+		// routes/room_routes.go
+		r.POST("/api/rooms/:id/share", middleware.AuthJWT(), controllers.ShareRoom) // tạo/lấy ShareURL
+		r.GET("/api/rooms/share/:shareURL", controllers.GetRoomByShareURL)          // truy cập room qua ShareURL (public)
+		r.POST("/api/rooms/:id/enter", middleware.AuthJWT(), controllers.EnterRoom) // nhập room (có pass thì check)
+		// Tham gia Room qua ShareURL (cần login)
+		r.POST("/api/rooms/share/:shareURL/enter", middleware.AuthJWT(), controllers.EnterRoomByShareURL)
+
 		//BE-23
 
 	}
