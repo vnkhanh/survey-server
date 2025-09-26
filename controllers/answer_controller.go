@@ -156,7 +156,7 @@ func SubmitSurvey(c *gin.Context) {
 						gin.H{"error": fmt.Sprintf("Câu hỏi %d là bắt buộc", ans.CauHoiID)})
 					return
 				}
-			case "UPLOAD_FILE":
+			case "UPLOAD_FILE", "FILE_UPLOAD":
 				// Kiểm tra file trong form data
 				fileKey := fmt.Sprintf("file_%d", ans.CauHoiID)
 				if _, err := c.FormFile(fileKey); err != nil {
@@ -221,7 +221,7 @@ func SubmitSurvey(c *gin.Context) {
 			switch strings.ToUpper(q.LoaiCauHoi) {
 			case "MULTIPLE_CHOICE":
 				ct.LuaChon = ans.LuaChon
-			case "UPLOAD_FILE":
+			case "UPLOAD_FILE", "FILE_UPLOAD":
 				fileKey := fmt.Sprintf("file_%d", ans.CauHoiID)
 				fileHeader, err := c.FormFile(fileKey)
 				if err != nil {
