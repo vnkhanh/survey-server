@@ -60,6 +60,7 @@ func SetupRoutes(r *gin.Engine) {
 			forms.GET("/:id/submissions/:sub_id", controllers.GetSubmissionDetail)
 			forms.GET("/:id/dashboard", controllers.GetFormDashboard)
 			forms.POST("/:id/export", middleware.CheckFormEditor(), controllers.CreateExport)
+			forms.POST("/:id/share", middleware.CheckFormOwner(), controllers.ShareForm)
 		}
 		api.GET("/forms/public/:shareToken", controllers.GetPublicForm) // BE-20  ĐỂ YÊN ROUTE NÀY NHA KHÔNG ĐỔI GÌ HẾT
 		api.POST("/uploads", controllers.UploadFile)
@@ -68,18 +69,18 @@ func SetupRoutes(r *gin.Engine) {
 		api.PUT("/questions/:id", middleware.CheckQuestionEditor(), controllers.UpdateQuestion)    // BE-06
 		api.DELETE("/questions/:id", middleware.CheckQuestionEditor(), controllers.DeleteQuestion) // BE-07
 		//invites
-		//roomInvites := api.Group("/room-invites")
-		/*{
-			//roomInvites.POST("/:id/invite", middleware.AuthJWT(), controllers.InviteUserToRoom) // gửi lời mời
-			//roomInvites.GET("/:id/invites", middleware.AuthJWT(), controllers.ListRoomInvites)
+		roomInvites := api.Group("/room-invites")
+		{
+			roomInvites.POST("/:id/invite", middleware.AuthJWT(), controllers.InviteUserToRoom) // gửi lời mời
+			roomInvites.GET("/:id/my", middleware.AuthJWT(), controllers.ListRoomInvites)
 			//roomInvites.PUT("/:inviteID/respond", controllers.RespondToInvite) // accept / reject
-			//roomInvites.DELETE("/:inviteID", controllers.DeleteInvite)         // xóa lời mời
+			roomInvites.DELETE("/:inviteID", controllers.DeleteInvite) // xóa lời mời
 			//roomInvites.GET("/my", middleware.AuthJWT(), controllers.ListMyInvites)
 			//roomInvites.GET("/my", middleware.FakeAuthMiddleware(), controllers.ListMyInvites)
-			//roomInvites.PUT("/:inviteID/respond", middleware.FakeAuthMiddleware(), controllers.RespondToInvite)
-			//	roomInvites.POST("/fake-create", controllers.CreateFakeInvite)
+			roomInvites.PUT("/:inviteID/respond", middleware.AuthJWT(), controllers.RespondToInvite)
+			//roomInvites.POST("/fake-create", controllers.CreateFakeInvite)
 		}
-		*/
+
 		// BE-12 - 17: room
 		rooms := api.Group("/rooms")
 		rooms.Use(middleware.AuthJWT())

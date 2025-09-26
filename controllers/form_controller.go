@@ -165,6 +165,7 @@ func GetFormDetail(c *gin.Context) {
 		"description": form.MoTa,
 		"settings":    settings,
 		"theme":       theme,
+		"public_link": form.PublicLink,
 		"questions":   out,
 	})
 }
