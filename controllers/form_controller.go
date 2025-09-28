@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -482,7 +483,6 @@ func ShareForm(c *gin.Context) {
 }
 
 // GET /api/forms/public/:shareToken
-// GET /api/forms/share/:shareToken
 func GetPublicForm(c *gin.Context) {
 	token := c.Param("shareToken")
 
@@ -609,10 +609,23 @@ func CloneForm(c *gin.Context) {
 		return
 	}
 
+	// Sinh token mới
+	newToken := uuid.NewString()
+	baseURL := os.Getenv("API_BASE_URL")
+
+	publicLink := fmt.Sprintf("%s/api/forms/public/%s", baseURL, newToken)
+	embedCode := fmt.Sprintf("<iframe src='%s' width='800' height='600'></iframe>", publicLink)
+
 	// Tạo form mới từ form gốc
 	newForm := form
 	newForm.ID = 0
 	newForm.TieuDe = form.TieuDe + " (Copy)"
+	newForm.ShareToken = &newToken
+	newForm.PublicLink = &publicLink
+	newForm.EmbedCode = &embedCode
+	newForm.SoLanTraLoi = 0
+	newForm.SoPhanHoi = 0
+	newForm.NgayTao = time.Now()
 
 	if err := config.DB.Create(&newForm).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể clone form", "error": err.Error()})
@@ -641,7 +654,10 @@ func CloneForm(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Clone form thành công", "data": newForm})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Clone form thành công",
+		"data":    newForm,
+	})
 }
 
 // BE-12: Lấy danh sách khảo sát của chính mình

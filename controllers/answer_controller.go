@@ -132,18 +132,7 @@ func SubmitSurvey(c *gin.Context) {
 		}
 
 		if q.PropsJSON != "" {
-			raw := q.PropsJSON
-
-			// Nếu props_json là chuỗi JSON (ví dụ "{\"required\":false,...}")
-			// thì cần giải mã thêm 1 lần để ra object thật
-			if strings.HasPrefix(strings.TrimSpace(raw), "\"") {
-				var unescaped string
-				if err := json.Unmarshal([]byte(raw), &unescaped); err == nil {
-					raw = unescaped
-				}
-			}
-
-			if err := json.Unmarshal([]byte(raw), &props); err != nil {
+			if err := parsePropsJSON(q.PropsJSON, &props); err != nil {
 				log.Printf("Lỗi parse props JSON cho câu hỏi %d: %v", ans.CauHoiID, err)
 			}
 		}
@@ -272,6 +261,27 @@ func SubmitSurvey(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Gửi khảo sát thành công"})
+}
+
+func normalizeJSON(raw string) string {
+	s := strings.TrimSpace(raw)
+	// liên tục unescape nếu còn bọc ngoài bằng dấu "
+	for len(s) > 0 && s[0] == '"' && s[len(s)-1] == '"' {
+		var unescaped string
+		if err := json.Unmarshal([]byte(s), &unescaped); err != nil {
+			break // không parse được nữa thì dừng
+		}
+		s = unescaped
+	}
+	return s
+}
+
+func parsePropsJSON(raw string, out interface{}) error {
+	s := normalizeJSON(raw)
+	if s == "" {
+		return nil
+	}
+	return json.Unmarshal([]byte(s), out)
 }
 
 // Helper functions
