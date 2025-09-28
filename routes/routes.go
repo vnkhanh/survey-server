@@ -64,7 +64,7 @@ func SetupRoutes(r *gin.Engine) {
 
 			forms.PUT("/:id/update-publiclink", middleware.CheckFormOwner(), controllers.UpdatePublicLink)
 		}
-		api.GET("/forms/public/:shareToken", middleware.OptionalAuth(), controllers.GetPublicForm) // BE-20  ĐỂ YÊN ROUTE NÀY NHA KHÔNG ĐỔI GÌ HẾT
+		api.GET("/forms/public/:shareToken", controllers.GetPublicForm) // BE-20  ĐỂ YÊN ROUTE NÀY NHA KHÔNG ĐỔI GÌ HẾT
 		api.POST("/uploads", controllers.UploadFile)
 		api.GET("/exports/:job_id", middleware.AuthJWT(), controllers.GetExport)
 

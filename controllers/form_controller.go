@@ -482,65 +482,38 @@ func ShareForm(c *gin.Context) {
 }
 
 // GET /api/forms/public/:shareToken
+// GET /api/forms/share/:shareToken
 func GetPublicForm(c *gin.Context) {
 	token := c.Param("shareToken")
 
 	var form models.KhaoSat
 	if err := config.DB.
 		Where("share_token = ?", token).
-		Preload("CauHois", func(db *gorm.DB) *gorm.DB { return db.Order("thu_tu ASC, id ASC") }).
-		Preload("CauHois.LuaChons", func(db *gorm.DB) *gorm.DB { return db.Order("thu_tu ASC, id ASC") }).
+		Preload("CauHois", func(db *gorm.DB) *gorm.DB { return db.Order("thu_tu ASC,id ASC") }).
+		Preload("CauHois.LuaChons", func(db *gorm.DB) *gorm.DB { return db.Order("thu_tu ASC,id ASC") }).
 		First(&form).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"message": "Form không tồn tại"})
 		return
 	}
 
-	// 1. Parse settings_json
-	var settings struct {
-		RequireLogin bool `json:"require_login"`
-		CollectEmail bool `json:"collect_email"`
-		MaxResponses *int `json:"max_responses"`
-	}
-	if form.SettingsJSON != "" {
-		_ = json.Unmarshal([]byte(form.SettingsJSON), &settings)
-	}
-
-	// 2. Kiểm tra giới hạn số lần trả lời (từ cột trong DB hoặc từ settings)
 	if form.GioiHanTL != nil && form.SoLanTraLoi >= *form.GioiHanTL {
 		c.JSON(http.StatusForbidden, gin.H{"message": "Đã đạt giới hạn số lần trả lời"})
 		return
 	}
-	if settings.MaxResponses != nil {
-		var count int64
-		if err := config.DB.Model(&models.PhanHoi{}).
-			Where("khao_sat_id = ?", form.ID).
-			Count(&count).Error; err == nil {
-			if count >= int64(*settings.MaxResponses) {
-				c.JSON(http.StatusForbidden, gin.H{"error": "Khảo sát đã đạt giới hạn số phản hồi"})
-				return
-			}
-		}
-	}
 
-	// 3. Kiểm tra yêu cầu đăng nhập
-	var userID *uint
-	if u, exists := c.Get(middleware.CtxUser); exists {
-		if user, ok := u.(models.NguoiDung); ok {
-			userID = &user.ID
-		}
-	}
-	if (settings.RequireLogin || settings.CollectEmail) && userID == nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Khảo sát này yêu cầu đăng nhập"})
-		return
-	}
+	// Không tự động tăng số lần trả lời ở đây nếu chỉ là GET hiển thị
+	// => Chỉ tăng khi người dùng POST câu trả lời.
 
-	// 4. Parse theme_json
-	var theme interface{}
+	// Parse JSON settings/theme
+	var settings, theme interface{}
+	if form.SettingsJSON != "" {
+		_ = json.Unmarshal([]byte(form.SettingsJSON), &settings)
+	}
 	if form.ThemeJSON != "" {
 		_ = json.Unmarshal([]byte(form.ThemeJSON), &theme)
 	}
 
-	// 5. Chuẩn bị danh sách câu hỏi
+	// Chuẩn bị danh sách câu hỏi
 	out := make([]QuestionDTO, 0, len(form.CauHois))
 	for _, q := range form.CauHois {
 		var props interface{}
@@ -557,7 +530,6 @@ func GetPublicForm(c *gin.Context) {
 		})
 	}
 
-	// 6. Trả về JSON
 	c.JSON(http.StatusOK, gin.H{
 		"id":             form.ID,
 		"tieu_de":        form.TieuDe,
