@@ -2,8 +2,10 @@ package controllers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -76,19 +78,21 @@ func CreateRoom(c *gin.Context) {
 
 // BE-13: danh sách room của người quản lý
 func ListRooms(c *gin.Context) {
-	u := c.MustGet(middleware.CtxUser).(models.NguoiDung) // lấy user từ token
+	u := c.MustGet(middleware.CtxUser).(models.NguoiDung)
 
-	var rooms []models.Room
-	query := config.DB.Model(&models.Room{}).
-		Where("nguoi_tao_id = ?", u.ID). // chỉ lấy room do user này tạo
-		Where("trang_thai != ?", "archived")
+	// Base query
+	baseQuery := config.DB.Table("room").
+		Joins("LEFT JOIN room_nguoi_tham_gia rntg ON rntg.room_id = room.id").
+		Where("(room.nguoi_tao_id = ? OR rntg.nguoi_dung_id = ?)", u.ID, u.ID).
+		Where("room.trang_thai != ?", "archived").
+		Group("room.id")
 
-	// filter theo tên (q)
+	// Filter theo tên
 	if q := c.Query("q"); q != "" {
-		query = query.Where("ten_room LIKE ?", "%"+q+"%")
+		baseQuery = baseQuery.Where("room.ten_room LIKE ?", "%"+q+"%")
 	}
 
-	// phân trang
+	// Phân trang
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	if page < 1 {
@@ -96,13 +100,25 @@ func ListRooms(c *gin.Context) {
 	}
 	offset := (page - 1) * limit
 
+	// ---- Đếm tổng số ----
 	var total int64
-	query.Count(&total)
+	if err := config.DB.Table("room").
+		Joins("LEFT JOIN room_nguoi_tham_gia rntg ON rntg.room_id = room.id").
+		Where("(room.nguoi_tao_id = ? OR rntg.nguoi_dung_id = ?)", u.ID, u.ID).
+		Where("room.trang_thai != ?", "archived").
+		Group("room.id").
+		Count(&total).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể đếm rooms"})
+		return
+	}
 
-	if err := query.
+	// ---- Lấy dữ liệu ----
+	var rooms []models.Room
+	if err := baseQuery.
+		Select("room.*").
 		Limit(limit).
 		Offset(offset).
-		Order("ngay_tao DESC").
+		Order("room.ngay_tao DESC").
 		Find(&rooms).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể lấy danh sách room"})
 		return
@@ -118,21 +134,47 @@ func ListRooms(c *gin.Context) {
 
 // BE-14: lấy chi tiết room
 func GetRoomDetail(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil || id <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"message": "ID không hợp lệ"})
-		return
-	}
-
+	param := c.Param("id")
 	var room models.Room
-	if err := config.DB.First(&room, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Room không tồn tại"})
+	var err error
+
+	// Kiểm tra xem param có phải số không
+	if id, convErr := strconv.Atoi(param); convErr == nil && id > 0 {
+		// Nếu là số => tìm theo ID
+		err = config.DB.
+			Preload("KhaoSat").
+			Preload("Members.NguoiDung").
+			First(&room, id).Error
+	} else {
+		// Nếu không phải số => tìm theo ShareURL
+		err = config.DB.
+			Preload("KhaoSat").
+			Preload("Members.NguoiDung").
+			Where("share_url = ?", param).
+			First(&room).Error
+	}
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy phòng"})
 		return
 	}
 
-	// Lấy form liên kết
 	var form models.KhaoSat
-	config.DB.First(&form, room.KhaoSatID)
+	if err := config.DB.First(&form, room.KhaoSatID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "Khảo sát không tồn tại"})
+		return
+	}
+
+	// Lấy public_link ưu tiên từ DB, nếu null thì fallback sang local URL
+	var publicLink string
+	if form.PublicLink != nil && *form.PublicLink != "" {
+		publicLink = *form.PublicLink
+	} else {
+		publicLink = fmt.Sprintf("%s/survey/%d", c.Request.Host, form.ID)
+		if !strings.HasPrefix(publicLink, "http") {
+			publicLink = "http://" + publicLink
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": gin.H{
@@ -144,9 +186,10 @@ func GetRoomDetail(c *gin.Context) {
 			"share_url":  room.ShareURL,
 			"is_public":  room.IsPublic,
 			"khao_sat": gin.H{
-				"id":      form.ID,
-				"tieu_de": form.TieuDe,
-				"mo_ta":   form.MoTa,
+				"id":          form.ID,
+				"tieu_de":     form.TieuDe,
+				"mo_ta":       form.MoTa,
+				"public_link": publicLink,
 			},
 		},
 	})
@@ -449,12 +492,12 @@ func EnterRoomByShareURL(c *gin.Context) {
 	}
 
 	var room models.Room
-	if err := config.DB.First(&room, "share_url = ?", shareURL).Error; err != nil {
+	if err := config.DB.Where("share_url = ?", shareURL).First(&room).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Room không tồn tại"})
 		return
 	}
 
-	// Lấy user từ context (phải login)
+	// Lấy user từ context
 	userVal, exists := c.Get(middleware.CtxUser)
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
@@ -462,13 +505,12 @@ func EnterRoomByShareURL(c *gin.Context) {
 	}
 	user := userVal.(models.NguoiDung)
 
-	// Kiểm tra room có bị khóa không
+	// Kiểm tra room khóa
 	isOwner := room.NguoiTaoID != nil && *room.NguoiTaoID == user.ID
 	if room.Khoa && !isOwner {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Room đã bị khóa, không thể tham gia"})
 		return
 	}
-
 	// Kiểm tra mật khẩu nếu có
 	if room.MatKhau != nil && *room.MatKhau != "" {
 		var body struct {
@@ -485,12 +527,10 @@ func EnterRoomByShareURL(c *gin.Context) {
 	}
 
 	// Kiểm tra user đã là thành viên chưa
-	var existing models.RoomNguoiThamGia
-	err := config.DB.Where("room_id = ? AND nguoi_dung_id = ?", room.ID, user.ID).
-		First(&existing).Error
-
+	var participant models.RoomNguoiThamGia
+	err := config.DB.Where("room_id = ? AND nguoi_dung_id = ?", room.ID, user.ID).First(&participant).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		participant := models.RoomNguoiThamGia{
+		participant = models.RoomNguoiThamGia{
 			RoomID:       room.ID,
 			NguoiDungID:  user.ID,
 			TenNguoiDung: user.Ten,
@@ -504,9 +544,12 @@ func EnterRoomByShareURL(c *gin.Context) {
 	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra thành viên"})
 		return
+	} else if participant.TrangThai != "active" {
+		participant.TrangThai = "active"
+		config.DB.Save(&participant)
 	}
 
-	// Lấy danh sách thành viên active
+	// Lấy danh sách members active
 	var participants []struct {
 		ID           uint   `json:"id"`
 		UserID       uint   `json:"user_id"`
@@ -527,7 +570,6 @@ func EnterRoomByShareURL(c *gin.Context) {
 		Where("room_id = ? AND trang_thai = ?", room.ID, "active").
 		Count(&memberCount)
 
-	// Trả kết quả
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"room": gin.H{
@@ -904,12 +946,7 @@ func RemoveMemberFromRoom(c *gin.Context) {
 
 // ===== BE-29: Lấy danh sách thành viên trong room =====
 func GetRoomParticipants(c *gin.Context) {
-	roomID := c.Param("id")
-	roomIDUint, err := strconv.ParseUint(roomID, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID room không hợp lệ"})
-		return
-	}
+	param := c.Param("id")
 
 	// Lấy user từ context
 	userVal, exists := c.Get(middleware.CtxUser)
@@ -919,9 +956,18 @@ func GetRoomParticipants(c *gin.Context) {
 	}
 	user := userVal.(models.NguoiDung)
 
-	// Lấy room
 	var room models.Room
-	if err := config.DB.First(&room, roomIDUint).Error; err != nil {
+	var err error
+
+	// Hỗ trợ cả ID số và share_url string
+	if id, convErr := strconv.ParseUint(param, 10, 64); convErr == nil && id > 0 {
+		err = config.DB.First(&room, id).Error
+	} else {
+		// Tìm theo share_url
+		err = config.DB.Where("share_url = ?", param).First(&room).Error
+	}
+
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Room không tồn tại"})
 		return
 	}
@@ -930,10 +976,14 @@ func GetRoomParticipants(c *gin.Context) {
 	if room.IsPublic != nil {
 		isPublic = *room.IsPublic
 	}
+
 	// Nếu room private, check quyền
 	if !isPublic {
 		var isParticipant int64
-		config.DB.Model(&models.RoomNguoiThamGia{}).Where("room_id = ? AND nguoi_dung_id = ? AND trang_thai = ?", roomIDUint, user.ID, "active").Count(&isParticipant)
+		config.DB.Model(&models.RoomNguoiThamGia{}).
+			Where("room_id = ? AND nguoi_dung_id = ? AND trang_thai = ?", room.ID, user.ID, "active").
+			Count(&isParticipant)
+
 		if room.NguoiTaoID != nil && *room.NguoiTaoID != user.ID && isParticipant == 0 {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Không có quyền xem danh sách thành viên"})
 			return
@@ -941,13 +991,13 @@ func GetRoomParticipants(c *gin.Context) {
 	}
 
 	var participants []models.RoomNguoiThamGia
-	if err := config.DB.Where("room_id = ? AND trang_thai = ?", roomIDUint, "active").Find(&participants).Error; err != nil {
+	if err := config.DB.Where("room_id = ? AND trang_thai = ?", room.ID, "active").Find(&participants).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lấy được danh sách thành viên"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"room_id":      roomID,
+		"room_id":      room.ID,
 		"participants": participants,
 	})
 }
