@@ -48,6 +48,11 @@ func SubmitSurvey(c *gin.Context) {
 		return
 	}
 
+	// 2.1. Check ngày kết thúc
+	if ks.NgayKetThuc != nil && time.Now().After(*ks.NgayKetThuc) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Khảo sát đã hết hạn"})
+		return
+	}
 	// 3. Parse settings_json
 	var settings struct {
 		RequireLogin bool `json:"require_login"`

@@ -23,6 +23,11 @@ func ConnectDB() {
 		log.Println("No .env file found, using system environment variables")
 	}
 
+	// Lấy timezone từ env
+	dbTZ := os.Getenv("DB_TZ")
+	if dbTZ == "" {
+		dbTZ = "UTC"
+	}
 	// Lấy biến môi trường
 	host := os.Getenv("DB_HOST")
 	portStr := os.Getenv("DB_PORT")
@@ -38,8 +43,8 @@ func ConnectDB() {
 
 	// DSN PostgreSQL
 	dsn := fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s port=%d sslmode=disable TimeZone=Asia/Ho_Chi_Minh",
-		host, user, password, dbName, port,
+		"host=%s user=%s password=%s dbname=%s port=%d sslmode=disable TimeZone=%s",
+		host, user, password, dbName, port, dbTZ,
 	)
 
 	// Kết nối DB với GORM
@@ -73,6 +78,11 @@ func ConnectDB() {
 		&models.ExportJob{},
 	); err != nil {
 		log.Fatalf("Failed to migrate: %v", err)
+	}
+
+	// Set timezone cho session
+	if _, err := sqlDB.Exec(fmt.Sprintf("SET TIME ZONE '%s'", dbTZ)); err != nil {
+		log.Printf("Failed to set timezone in DB session: %v", err)
 	}
 
 	DB = db

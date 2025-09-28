@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"time"
@@ -12,6 +13,8 @@ import (
 )
 
 func main() {
+	fmt.Println("Giờ hiện tại:", time.Now())
+
 	// Kết nối DB + AutoMigrate
 	config.ConnectDB()
 

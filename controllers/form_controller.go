@@ -178,6 +178,7 @@ type updateFormReq struct {
 	Title       *string          `json:"title"`
 	Description *string          `json:"description"`
 	Settings    *json.RawMessage `json:"settings"`
+	EndDate     *time.Time       `json:"end_date"` // thêm ngày kết thúc
 }
 
 func UpdateForm(c *gin.Context) {
@@ -208,6 +209,17 @@ func UpdateForm(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể lưu settings"})
 			return
 		}
+	}
+
+	if req.EndDate != nil {
+		// Validation: end_date phải >= ngay_tao
+		if req.EndDate.Before(f.NgayTao) {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{
+				"message": "Ngày kết thúc phải lớn hơn hoặc bằng ngày tạo",
+			})
+			return
+		}
+		updates["ngay_ket_thuc"] = req.EndDate
 	}
 
 	if len(updates) == 0 {
