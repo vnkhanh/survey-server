@@ -68,8 +68,8 @@ func SetupRoutes(r *gin.Engine) {
 		api.POST("/uploads", controllers.UploadFile)
 		api.GET("/exports/:job_id", middleware.AuthJWT(), controllers.GetExport)
 
-		api.PUT("/questions/:id", middleware.CheckQuestionEditor(), middleware.AuthJWT(), controllers.UpdateQuestion)    // BE-06
-		api.DELETE("/questions/:id", middleware.CheckQuestionEditor(), middleware.AuthJWT(), controllers.DeleteQuestion) // BE-07
+		api.PUT("/questions/:id", middleware.AuthJWT(), middleware.CheckQuestionEditor(), controllers.UpdateQuestion)    // BE-06
+		api.DELETE("/questions/:id", middleware.AuthJWT(), middleware.CheckQuestionEditor(), controllers.DeleteQuestion) // BE-07
 		//invites
 		roomInvites := api.Group("/room-invites")
 		{
