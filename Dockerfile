@@ -33,5 +33,3 @@ EXPOSE 8080
 # Entry point: wait-for-it chỉ chờ DB nếu hostname là 'db'
 # Khi deploy, DB_HOST sẽ là Managed DB, wait-for-it sẽ timeout 0 và chạy thẳng
 ENTRYPOINT ["sh", "-c", "./wait-for-it.sh --host=${DB_HOST:-db} --port=${DB_PORT:-5432} -- ./server"]
-
-
