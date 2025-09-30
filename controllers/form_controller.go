@@ -609,65 +609,93 @@ func UpdateFormLimit(c *gin.Context) {
 	c.JSON(200, gin.H{"message": "Cập nhật giới hạn thành công", "gioi_han_tl": req.GioiHanTL})
 }
 
-// BE-32 Clone Form (bao gồm câu hỏi + lựa chọn)
+// BE-32 Clone Form (bao gồm form + câu hỏi)
 func CloneForm(c *gin.Context) {
 	id := c.Param("id")
-	var form models.KhaoSat
 
-	// Lấy form gốc
-	if err := config.DB.Preload("CauHois.LuaChons").First(&form, id).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"message": "Form không tồn tại"})
+	var original models.KhaoSat
+	if err := config.DB.Preload("CauHois").First(&original, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Form không tồn tại"})
 		return
 	}
 
-	// Sinh token mới
+	// Bắt đầu transaction
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể bắt đầu transaction"})
+		return
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Đã xảy ra lỗi khi clone form"})
+		}
+	}()
+
+	// Sinh token mới cho form clone
 	newToken := uuid.NewString()
 	baseURL := os.Getenv("API_BASE_URL")
-
 	publicLink := fmt.Sprintf("%s/api/forms/public/%s", baseURL, newToken)
 	embedCode := fmt.Sprintf("<iframe src='%s' width='800' height='600'></iframe>", publicLink)
 
-	// Tạo form mới từ form gốc
-	newForm := form
-	newForm.ID = 0
-	newForm.TieuDe = form.TieuDe + " (Copy)"
-	newForm.ShareToken = &newToken
-	newForm.PublicLink = &publicLink
-	newForm.EmbedCode = &embedCode
-	newForm.SoLanTraLoi = 0
-	newForm.SoPhanHoi = 0
-	newForm.NgayTao = time.Now()
+	// Clone form
+	newForm := models.KhaoSat{
+		TieuDe:       original.TieuDe + " (Copy)",
+		MoTa:         original.MoTa,
+		NguoiTaoID:   original.NguoiTaoID,
+		TemplateID:   original.TemplateID,
+		SettingsJSON: original.SettingsJSON,
+		ThemeJSON:    original.ThemeJSON,
+		// TrangThai để active luôn
+		TrangThai:   "active",
+		ShareToken:  &newToken,
+		PublicLink:  &publicLink,
+		EmbedCode:   &embedCode,
+		SoLanTraLoi: 0,
+		SoPhanHoi:   0,
+		NgayTao:     time.Now(),
+	}
 
-	if err := config.DB.Create(&newForm).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể clone form", "error": err.Error()})
+	if err := tx.Create(&newForm).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể clone form", "detail": err.Error()})
 		return
 	}
 
-	// Clone câu hỏi và lựa chọn
-	for _, q := range form.CauHois {
-		newQ := q
-		newQ.ID = 0
-		newQ.KhaoSatID = newForm.ID
-
-		if err := config.DB.Create(&newQ).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể clone câu hỏi", "error": err.Error()})
-			return
+	// Clone câu hỏi (PropsJSON giữ nguyên)
+	for _, q := range original.CauHois {
+		newQ := models.CauHoi{
+			KhaoSatID:  newForm.ID,
+			NoiDung:    q.NoiDung,
+			LoaiCauHoi: q.LoaiCauHoi,
+			ThuTu:      q.ThuTu,
+			PropsJSON:  q.PropsJSON,
 		}
 
-		for _, lc := range q.LuaChons {
-			newLC := lc
-			newLC.ID = 0
-			newLC.CauHoiID = newQ.ID
-			if err := config.DB.Create(&newLC).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể clone lựa chọn", "error": err.Error()})
-				return
-			}
+		if err := tx.Create(&newQ).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể clone câu hỏi", "detail": err.Error()})
+			return
 		}
 	}
 
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể commit transaction", "detail": err.Error()})
+		return
+	}
+
+	// Load lại danh sách câu hỏi của khảo sát mới
+	if err := config.DB.Preload("CauHois").First(&newForm, newForm.ID).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể load câu hỏi sau khi clone"})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Clone form thành công",
-		"data":    newForm,
+		"form":    newForm,
+		"cauhoi":  newForm.CauHois,
 	})
 }
 
