@@ -623,7 +623,7 @@ func GetFormDashboard(c *gin.Context) {
 
 		// -----------------------------
 		// Upload file
-		case "UPLOAD_FILE":
+		case "UPLOAD_FILE", "FILE_UPLOAD":
 			var rows []struct {
 				UserID sql.NullInt64
 				File   sql.NullString
