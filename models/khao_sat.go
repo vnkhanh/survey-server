@@ -12,8 +12,8 @@ type KhaoSat struct {
 	NgayKetThuc   *time.Time `gorm:"column:ngay_ket_thuc" json:"ngay_ket_thuc"`
 	TemplateID    *uint      `gorm:"column:template_id" json:"template_id"`
 	SoPhanHoi     int        `gorm:"column:so_phan_hoi" json:"so_phan_hoi"`
-	SettingsJSON  string     `gorm:"column:settings_json;type:text" json:"-"`
-	ThemeJSON     string     `gorm:"column:theme_json;type:text" json:"-"`
+	SettingsJSON  string     `gorm:"column:settings_json;type:text" json:"settings_json"`
+	ThemeJSON     string     `gorm:"column:theme_json;type:text" json:"theme_json"`
 	EditTokenHash string     `gorm:"column:edit_token_hash;type:text" json:"-"`
 
 	// Thêm trường để share form
