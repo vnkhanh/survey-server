@@ -646,32 +646,65 @@ func GetLobbyRooms(c *gin.Context) {
 		return
 	}
 
-	// Tính tổng số trang
-	totalPages := int((total + int64(limit) - 1) / int64(limit))
-
-	// Lấy room (có preload members)
-	if err := query.Preload("Members", "trang_thai = ?", "active").
+	// Lấy room (có preload members và NguoiDung)
+	if err := query.Preload("Members.NguoiDung").
 		Offset(offset).Limit(limit).
 		Find(&rooms).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không lấy được danh sách room", "error": err.Error()})
 		return
 	}
 
-	// Chuẩn bị response
 	var result []gin.H
 	for _, room := range rooms {
+		var members []gin.H
+
+		// Map RoomNguoiThamGia -> JSON
+		for _, m := range room.Members {
+			if m.NguoiDung.ID == 0 {
+				continue
+			}
+			member := gin.H{
+				"id":     m.NguoiDung.ID,
+				"name":   m.NguoiDung.Ten,
+				"email":  m.NguoiDung.Email,
+				"status": m.TrangThai, // sửa từ Status -> TrangThai
+			}
+			members = append(members, member)
+		}
+
+		// Thêm owner nếu chưa có trong members
+		ownerExists := false
+		if room.NguoiTaoID != nil {
+			for _, m := range members {
+				if id, ok := m["id"].(uint); ok && id == *room.NguoiTaoID {
+					ownerExists = true
+					break
+				}
+			}
+
+			if !ownerExists {
+				owner := gin.H{
+					"id":     room.NguoiTao.ID,
+					"name":   room.NguoiTao.Ten,
+					"email":  room.NguoiTao.Email,
+					"status": "owner",
+				}
+				members = append([]gin.H{owner}, members...)
+			}
+		}
+
 		result = append(result, gin.H{
 			"id":           room.ID,
 			"ten_room":     room.TenRoom,
 			"mo_ta":        room.MoTa,
 			"trang_thai":   room.TrangThai,
-			"member_count": len(room.Members),
-			"members":      room.Members,
+			"member_count": len(members),
+			"members":      members,
 			"is_public":    room.IsPublic,
 		})
 	}
 
-	// Trả về JSON
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
 	c.JSON(http.StatusOK, gin.H{
 		"rooms":      result,
 		"page":       page,
