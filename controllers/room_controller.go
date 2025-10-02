@@ -144,12 +144,14 @@ func GetRoomDetail(c *gin.Context) {
 		err = config.DB.
 			Preload("KhaoSat").
 			Preload("Members.NguoiDung").
+			Preload("NguoiTao"). // preload người tạo
 			First(&room, id).Error
 	} else {
 		// Nếu không phải số => tìm theo ShareURL
 		err = config.DB.
 			Preload("KhaoSat").
 			Preload("Members.NguoiDung").
+			Preload("NguoiTao"). // preload người tạo
 			Where("share_url = ?", param).
 			First(&room).Error
 	}
@@ -183,7 +185,6 @@ func GetRoomDetail(c *gin.Context) {
 			"id":            m.ID,
 			"nguoi_dung_id": m.NguoiDungID,
 			"ten": func() string {
-				// Ưu tiên tên lưu ở RoomNguoiThamGia, nếu trống thì fallback sang NguoiDung.Ten
 				if m.TenNguoiDung != "" {
 					return m.TenNguoiDung
 				}
@@ -205,6 +206,11 @@ func GetRoomDetail(c *gin.Context) {
 			"khoa":       room.Khoa,
 			"share_url":  room.ShareURL,
 			"is_public":  room.IsPublic,
+			"nguoi_tao": gin.H{ // thêm block người tạo
+				"id":    room.NguoiTao.ID,
+				"ten":   room.NguoiTao.Ten,
+				"email": room.NguoiTao.Email,
+			},
 			"khao_sat": gin.H{
 				"id":          form.ID,
 				"tieu_de":     form.TieuDe,
