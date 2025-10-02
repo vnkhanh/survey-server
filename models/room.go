@@ -9,6 +9,7 @@ type Room struct {
 	MoTa        *string            `gorm:"column:mo_ta;type:text" json:"mo_ta"`
 	MatKhau     *string            `gorm:"column:mat_khau;size:255" json:"-"`
 	NguoiTaoID  *uint              `gorm:"column:nguoi_tao_id" json:"nguoi_tao_id"`
+	NguoiTao    NguoiDung          `gorm:"foreignKey:NguoiTaoID;references:ID" json:"nguoi_tao"`
 	TrangThai   string             `gorm:"column:trang_thai;size:20;default:'active'" json:"trang_thai"`
 	IsPublic    *bool              `gorm:"column:is_public;default:true" json:"is_public"`
 	Khoa        bool               `gorm:"column:khoa;default:false" json:"khoa"`
