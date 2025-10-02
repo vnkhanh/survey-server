@@ -176,6 +176,26 @@ func GetRoomDetail(c *gin.Context) {
 		}
 	}
 
+	// Build danh sách thành viên
+	members := make([]gin.H, 0)
+	for _, m := range room.Members {
+		members = append(members, gin.H{
+			"id":            m.ID,
+			"nguoi_dung_id": m.NguoiDungID,
+			"ten": func() string {
+				// Ưu tiên tên lưu ở RoomNguoiThamGia, nếu trống thì fallback sang NguoiDung.Ten
+				if m.TenNguoiDung != "" {
+					return m.TenNguoiDung
+				}
+				return m.NguoiDung.Ten
+			}(),
+			"email":      m.NguoiDung.Email,
+			"trang_thai": m.TrangThai,
+			"ngay_vao":   m.NgayVao,
+			"ip":         m.IP,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"data": gin.H{
 			"id":         room.ID,
@@ -191,6 +211,7 @@ func GetRoomDetail(c *gin.Context) {
 				"mo_ta":       form.MoTa,
 				"public_link": publicLink,
 			},
+			"members": members,
 		},
 	})
 }
@@ -743,7 +764,7 @@ func EnterRoom(c *gin.Context) {
 }
 
 // ===== API 22-2: Thêm thành viên vào room =====
-// ✅ Gửi lời mời
+// Gửi lời mời
 func InviteUserToRoom(c *gin.Context) {
 	userVal, exists := c.Get(middleware.CtxUser)
 	if !exists {
