@@ -413,7 +413,7 @@ func SetRoomPassword(c *gin.Context) {
 
 	// Cập nhật room
 	room.MatKhau = &pwd
-	room.Khoa = true
+	room.Khoa = false
 
 	if err := config.DB.Save(&room).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không đặt được mật khẩu"})
