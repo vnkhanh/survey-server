@@ -733,3 +733,148 @@ func GetMyForms(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"forms": out})
 }
+
+// BE cập nhật form
+
+type questionPayload struct {
+	ID      *uint            `json:"id,omitempty"`      // nếu có → update / delete
+	Delete  *bool            `json:"delete,omitempty"`  // true → xóa
+	Content *string          `json:"content,omitempty"` // nội dung question
+	Loai    *string          `json:"loai_cau_hoi,omitempty"`
+	ThuTu   *int             `json:"thu_tu,omitempty"`
+	Props   *json.RawMessage `json:"props,omitempty"` // JSON object
+}
+
+type updateFormWithQuestionsReq struct {
+	Title       *string           `json:"title,omitempty"`
+	Description *string           `json:"description,omitempty"`
+	Settings    *json.RawMessage  `json:"settings,omitempty"`
+	EndDate     *time.Time        `json:"end_date,omitempty"`
+	Questions   []questionPayload `json:"questions,omitempty"`
+}
+
+func UpdateFormWithQuestions(c *gin.Context) {
+	// Lấy form ID từ param
+	formID := c.Param("id")
+	var f models.KhaoSat
+	if err := config.DB.Preload("CauHois").First(&f, formID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"message": "Form không tồn tại"})
+		return
+	}
+
+	var req updateFormWithQuestionsReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": "Payload không hợp lệ", "error": err.Error()})
+		return
+	}
+
+	err := config.DB.Transaction(func(tx *gorm.DB) error {
+		// --- Update form ---
+		updates := map[string]interface{}{}
+		if req.Title != nil {
+			updates["tieu_de"] = *req.Title
+		}
+		if req.Description != nil {
+			updates["mo_ta"] = *req.Description
+		}
+		if req.Settings != nil {
+			st, err := utils.ParseSettings(*req.Settings)
+			if err != nil {
+				return err
+			}
+			if normalized, err := utils.NormalizeSettingsJSON(st); err == nil {
+				updates["settings_json"] = normalized
+			} else {
+				return err
+			}
+		}
+		if req.EndDate != nil {
+			if req.EndDate.Before(f.NgayTao) {
+				return &gin.Error{Err: nil, Type: gin.ErrorTypePublic, Meta: "Ngày kết thúc phải >= ngày tạo"}
+			}
+			updates["ngay_ket_thuc"] = req.EndDate
+		}
+		if len(updates) > 0 {
+			if err := tx.Model(&f).Updates(updates).Error; err != nil {
+				return err
+			}
+		}
+
+		// --- Update / Insert / Delete questions ---
+		for _, q := range req.Questions {
+			if q.ID != nil {
+				var existing models.CauHoi
+				if err := tx.First(&existing, *q.ID).Error; err != nil {
+					return err
+				}
+
+				if q.Delete != nil && *q.Delete {
+					if err := tx.Delete(&existing).Error; err != nil {
+						return err
+					}
+					continue
+				}
+
+				updatesQ := map[string]interface{}{}
+				if q.Content != nil {
+					updatesQ["noi_dung"] = *q.Content
+				}
+				if q.Loai != nil {
+					updatesQ["loai_cau_hoi"] = *q.Loai
+				}
+				if q.ThuTu != nil {
+					updatesQ["thu_tu"] = *q.ThuTu
+				}
+				if q.Props != nil {
+					var tmp interface{}
+					if err := json.Unmarshal(*q.Props, &tmp); err != nil {
+						return err
+					}
+					norm, _ := json.Marshal(tmp)
+					updatesQ["props_json"] = string(norm)
+				}
+
+				if len(updatesQ) > 0 {
+					if err := tx.Model(&existing).Updates(updatesQ).Error; err != nil {
+						return err
+					}
+				}
+
+			} else {
+				// Insert new question
+				newQ := models.CauHoi{
+					KhaoSatID: f.ID,
+				}
+				if q.Content != nil {
+					newQ.NoiDung = *q.Content
+				}
+				if q.Loai != nil {
+					newQ.LoaiCauHoi = *q.Loai
+				}
+				if q.ThuTu != nil {
+					newQ.ThuTu = *q.ThuTu
+				}
+				if q.Props != nil {
+					var tmp interface{}
+					if err := json.Unmarshal(*q.Props, &tmp); err != nil {
+						return err
+					}
+					norm, _ := json.Marshal(tmp)
+					newQ.PropsJSON = string(norm)
+				}
+				if err := tx.Create(&newQ).Error; err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Form và câu hỏi đã cập nhật thành công"})
+}

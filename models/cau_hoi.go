@@ -11,7 +11,7 @@ type CauHoi struct {
 
 	// Quan hệ
 	LuaChons   []LuaChon   `gorm:"foreignKey:CauHoiID" json:"-"`
-	CauTraLois []CauTraLoi `gorm:"foreignKey:CauHoiID" json:"-"`
+	CauTraLois []CauTraLoi `gorm:"foreignKey:CauHoiID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE"`
 }
 
 func (CauHoi) TableName() string {

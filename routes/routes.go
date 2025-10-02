@@ -61,6 +61,7 @@ func SetupRoutes(r *gin.Engine) {
 			forms.GET("/:id/dashboard", controllers.GetFormDashboard)
 			forms.POST("/:id/export", middleware.CheckFormEditor(), controllers.CreateExport)
 			forms.POST("/:id/share", middleware.CheckFormOwner(), controllers.ShareForm)
+			forms.PUT("/:id/updateform", middleware.CheckFormOwner(), controllers.UpdateFormWithQuestions)
 
 			forms.PUT("/:id/update-publiclink", middleware.CheckFormOwner(), controllers.UpdatePublicLink)
 		}
