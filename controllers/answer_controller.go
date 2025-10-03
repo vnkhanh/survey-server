@@ -144,7 +144,7 @@ func SubmitSurvey(c *gin.Context) {
 
 		if props.Required {
 			switch strings.ToUpper(q.LoaiCauHoi) {
-			case "MULTIPLE_CHOICE":
+			case "MULTIPLE_CHOICE", "TRUE_FALSE":
 				if strings.TrimSpace(ans.LuaChon) == "" || ans.LuaChon == "[]" {
 					c.JSON(http.StatusBadRequest,
 						gin.H{"error": fmt.Sprintf("Câu hỏi %d là bắt buộc", ans.CauHoiID)})
@@ -213,7 +213,7 @@ func SubmitSurvey(c *gin.Context) {
 			}
 
 			switch strings.ToUpper(q.LoaiCauHoi) {
-			case "MULTIPLE_CHOICE":
+			case "MULTIPLE_CHOICE", "TRUE_FALSE":
 				ct.LuaChon = ans.LuaChon
 			case "UPLOAD_FILE", "FILE_UPLOAD":
 				fileKey := fmt.Sprintf("file_%d", ans.CauHoiID)
