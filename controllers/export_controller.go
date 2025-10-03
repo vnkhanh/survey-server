@@ -198,7 +198,7 @@ func processExportJob(jobID string) {
 				val := ""
 				if ans, ok := answerMap[q.ID]; ok {
 					switch strings.ToUpper(q.LoaiCauHoi) {
-					case "FILL_BLANK", "RATING", "TRUE_FALSE":
+					case "FILL_BLANK", "RATING":
 						val = ans.NoiDung
 					case "UPLOAD_FILE", "FILE_UPLOAD":
 						if job.IncludeAttachments {
@@ -206,7 +206,7 @@ func processExportJob(jobID string) {
 						} else if ans.NoiDung != "" {
 							val = "[đã đính kèm]"
 						}
-					case "MULTIPLE_CHOICE":
+					case "MULTIPLE_CHOICE", "TRUE_FALSE":
 						var opts []string
 						if err := json.Unmarshal([]byte(ans.LuaChon), &opts); err == nil {
 							val = strings.Join(opts, ", ")
@@ -259,7 +259,7 @@ func processExportJob(jobID string) {
 				val := ""
 				if ans, ok := answerMap[q.ID]; ok {
 					switch strings.ToUpper(q.LoaiCauHoi) {
-					case "FILL_BLANK", "RATING", "TRUE_FALSE":
+					case "FILL_BLANK", "RATING":
 						val = ans.NoiDung
 					case "UPLOAD_FILE", "FILE_UPLOAD":
 						if job.IncludeAttachments {
@@ -267,7 +267,7 @@ func processExportJob(jobID string) {
 						} else if ans.NoiDung != "" {
 							val = "[đã đính kèm]"
 						}
-					case "MULTIPLE_CHOICE":
+					case "MULTIPLE_CHOICE", "TRUE_FALSE":
 						var opts []string
 						if err := json.Unmarshal([]byte(ans.LuaChon), &opts); err == nil {
 							val = strings.Join(opts, ", ")
