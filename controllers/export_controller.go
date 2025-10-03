@@ -125,12 +125,19 @@ func processExportJob(jobID string) {
 	filename := fmt.Sprintf("export_%s.%s", job.JobID, ext)
 	outPath := path.Join(outDir, filename)
 
+	// helper update fail
+	failJob := func(em string) {
+		config.DB.Model(&job).Updates(map[string]interface{}{
+			"status":    "failed",
+			"error_msg": em,
+		})
+	}
+
 	// 1. Lấy danh sách câu hỏi
 	var questions []models.CauHoi
 	if err := config.DB.Where("khao_sat_id = ?", job.KhaoSatID).
 		Order("id asc").Find(&questions).Error; err != nil {
-		em := err.Error()
-		config.DB.Model(&job).Updates(map[string]interface{}{"status": "failed", "error_msg": em})
+		failJob(err.Error())
 		return
 	}
 
@@ -144,8 +151,7 @@ func processExportJob(jobID string) {
 		q = q.Where("ngay_gui <= ?", job.RangeTo)
 	}
 	if err := q.Find(&responses).Error; err != nil {
-		em := err.Error()
-		config.DB.Model(&job).Updates(map[string]interface{}{"status": "failed", "error_msg": em})
+		failJob(err.Error())
 		return
 	}
 
@@ -163,15 +169,14 @@ func processExportJob(jobID string) {
 	if ext == "csv" {
 		f, err := os.Create(outPath)
 		if err != nil {
-			em := err.Error()
-			config.DB.Model(&job).Updates(map[string]interface{}{"status": "failed", "error_msg": em})
+			failJob(err.Error())
 			return
 		}
 		defer f.Close()
-		// Ghi BOM UTF-8 để Excel nhận diện đúng encoding tiếng Việt
+
+		// BOM UTF-8
 		if _, err := f.Write([]byte{0xEF, 0xBB, 0xBF}); err != nil {
-			em := err.Error()
-			config.DB.Model(&job).Updates(map[string]interface{}{"status": "failed", "error_msg": em})
+			failJob(err.Error())
 			return
 		}
 
@@ -180,8 +185,7 @@ func processExportJob(jobID string) {
 
 		// Ghi header
 		if err := w.Write(header); err != nil {
-			em := err.Error()
-			config.DB.Model(&job).Updates(map[string]interface{}{"status": "failed", "error_msg": em})
+			failJob(err.Error())
 			return
 		}
 
@@ -200,18 +204,22 @@ func processExportJob(jobID string) {
 					switch strings.ToUpper(q.LoaiCauHoi) {
 					case "FILL_BLANK", "RATING":
 						val = ans.NoiDung
+
 					case "UPLOAD_FILE", "FILE_UPLOAD":
 						if job.IncludeAttachments {
 							val = ans.NoiDung
 						} else if ans.NoiDung != "" {
 							val = "[đã đính kèm]"
 						}
+
 					case "MULTIPLE_CHOICE", "TRUE_FALSE":
-						var opts []string
-						if err := json.Unmarshal([]byte(ans.LuaChon), &opts); err == nil {
-							val = strings.Join(opts, ", ")
-						} else {
-							val = ans.LuaChon
+						if ans.LuaChon != "" {
+							var opts []string
+							if err := json.Unmarshal([]byte(ans.LuaChon), &opts); err == nil {
+								val = strings.Join(opts, ", ")
+							} else {
+								val = ans.LuaChon
+							}
 						}
 					}
 				}
@@ -219,33 +227,38 @@ func processExportJob(jobID string) {
 			}
 
 			if err := w.Write(row); err != nil {
-				em := err.Error()
-				config.DB.Model(&job).Updates(map[string]interface{}{"status": "failed", "error_msg": em})
+				failJob(err.Error())
 				return
 			}
-			config.DB.Model(&job).Updates(map[string]interface{}{
-				"status":    "done",
-				"file_path": outPath,
-			})
-
 		}
+		w.Flush()
+		if err := w.Error(); err != nil {
+			failJob(err.Error())
+			return
+		}
+
+		// done
+		config.DB.Model(&job).Updates(map[string]interface{}{
+			"status":    "done",
+			"file_path": outPath,
+		})
 
 	} else { // --- Nếu XLSX ---
 		f := excelize.NewFile()
 		sheet := f.GetSheetName(f.GetActiveSheetIndex())
 
-		// Ghi header
+		// header
 		for i, h := range header {
 			col, _ := excelize.ColumnNumberToName(i + 1)
 			cell := fmt.Sprintf("%s1", col)
 			f.SetCellValue(sheet, cell, h)
-
 		}
 
-		// Ghi dữ liệu
+		// data
 		for ri, r := range responses {
-			rowIdx := ri + 2 // bắt đầu từ dòng 2
-			f.SetCellValue(sheet, fmt.Sprintf("A%d", rowIdx), r.NgayGui.Format("02/01/2006 15:04:05"))
+			rowIdx := ri + 2
+			f.SetCellValue(sheet, fmt.Sprintf("A%d", rowIdx),
+				r.NgayGui.Format("02/01/2006 15:04:05"))
 
 			answerMap := make(map[uint]models.CauTraLoi)
 			for _, a := range r.CauTraLois {
@@ -253,7 +266,7 @@ func processExportJob(jobID string) {
 			}
 
 			for qi, q := range questions {
-				col, _ := excelize.ColumnNumberToName(qi + 2) // +2 vì A=1 là timestamp, B=2 là câu hỏi đầu tiên
+				col, _ := excelize.ColumnNumberToName(qi + 2)
 				cell := fmt.Sprintf("%s%d", col, rowIdx)
 
 				val := ""
@@ -261,30 +274,37 @@ func processExportJob(jobID string) {
 					switch strings.ToUpper(q.LoaiCauHoi) {
 					case "FILL_BLANK", "RATING":
 						val = ans.NoiDung
+
 					case "UPLOAD_FILE", "FILE_UPLOAD":
 						if job.IncludeAttachments {
 							val = ans.NoiDung
 						} else if ans.NoiDung != "" {
 							val = "[đã đính kèm]"
 						}
+
 					case "MULTIPLE_CHOICE", "TRUE_FALSE":
-						var opts []string
-						if err := json.Unmarshal([]byte(ans.LuaChon), &opts); err == nil {
-							val = strings.Join(opts, ", ")
-						} else {
-							val = ans.LuaChon
+						if ans.LuaChon != "" {
+							var opts []string
+							if err := json.Unmarshal([]byte(ans.LuaChon), &opts); err == nil {
+								val = strings.Join(opts, ", ")
+							} else {
+								val = ans.LuaChon
+							}
 						}
 					}
 					f.SetCellValue(sheet, cell, val)
 				}
 			}
 		}
+
 		if err := f.SaveAs(outPath); err != nil {
-			em := err.Error()
-			config.DB.Model(&job).Updates(map[string]interface{}{"status": "failed", "error_msg": em})
+			failJob(err.Error())
 			return
 		}
-		// 4. Cập nhật trạng thái hoàn tất
-		config.DB.Model(&job).Updates(map[string]interface{}{"status": "done", "file_path": outPath})
+
+		config.DB.Model(&job).Updates(map[string]interface{}{
+			"status":    "done",
+			"file_path": outPath,
+		})
 	}
 }
