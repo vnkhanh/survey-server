@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"errors"
-	
 	"fmt"
 	"net/http"
 	"strconv"
@@ -218,13 +217,13 @@ func GetRoomDetail(c *gin.Context) {
 
 		members = append(members, gin.H{
 			"id":            m.ID,
-			"user_id":       m.NguoiDungID,
+			"user_id":       m.NguoiDungID, // thêm user_id để FE dễ xử lý
 			"nguoi_dung_id": m.NguoiDungID,
 			"ten":           memberName,
-			"name":          memberName,
+			"name":          memberName, // thêm field name cho FE
 			"email":         m.NguoiDung.Email,
 			"trang_thai":    m.TrangThai,
-			"status":        m.TrangThai,
+			"status":        m.TrangThai, // thêm field status cho FE
 			"ngay_vao":      m.NgayVao,
 			"ip":            m.IP,
 		})
@@ -247,25 +246,20 @@ func GetRoomDetail(c *gin.Context) {
 		}
 	}
 
-	// KIỂM TRA CÓ MẬT KHẨU KHÔNG
-	hasPassword := room.MatKhau != nil && *room.MatKhau != ""
-
 	c.JSON(http.StatusOK, gin.H{
 		"data": gin.H{
-			"id":               room.ID,
-			"ten_room":         room.TenRoom,
-			"mo_ta":            room.MoTa,
-			"trang_thai":       room.TrangThai,
-			"khoa":             room.Khoa,
-			"share_url":        room.ShareURL,
-			"is_public":        room.IsPublic,
-			"is_locked":        room.IsLocked,
-			"nguoi_tao_id":     room.NguoiTaoID,
-			"nguoi_tao_ten":    room.NguoiTao.Ten,
-			"nguoi_tao_email":  room.NguoiTao.Email,
-			"nguoi_tao":        nguoiTaoResponse,
-			"mat_khau":         hasPassword, 
-			"require_password": hasPassword,
+			"id":            room.ID,
+			"ten_room":      room.TenRoom,
+			"mo_ta":         room.MoTa,
+			"trang_thai":    room.TrangThai,
+			"khoa":          room.Khoa,
+			"share_url":     room.ShareURL,
+			"is_public":     room.IsPublic,
+			"is_locked":     room.IsLocked,
+			"nguoi_tao_id":  room.NguoiTaoID,
+			"nguoi_tao_ten": room.NguoiTao.Ten,   // thêm tên owner riêng
+			"nguoi_tao_email": room.NguoiTao.Email, // thêm email owner riêng
+			"nguoi_tao":     nguoiTaoResponse,
 			"khao_sat": gin.H{
 				"id":          form.ID,
 				"tieu_de":     form.TieuDe,
@@ -276,7 +270,8 @@ func GetRoomDetail(c *gin.Context) {
 			"member_count": len(members) + 1, // +1 cho owner
 		},
 	})
-}n.Context) {
+}
+func UpdateRoom(c *gin.Context) {
 	// roomObj đã được middleware.CheckRoomOwner nạp vào context
 	room := c.MustGet("roomObj").(models.Room)
 
@@ -709,7 +704,8 @@ func EnterRoomByShareURL(c *gin.Context) {
 	})
 }
 
-// BE21 Lấy danh sách room public (lobby) - FIXED
+// BE21 Lấy danh sách room public (lobby)
+// BE: Lấy danh sách room trong lobby (phân trang + tìm kiếm theo tên)
 func GetLobbyRooms(c *gin.Context) {
 	var rooms []models.Room
 
@@ -744,7 +740,6 @@ func GetLobbyRooms(c *gin.Context) {
 
 	// Lấy room (có preload members và NguoiDung)
 	if err := query.Preload("Members.NguoiDung").
-		Preload("NguoiTao"). // THÊM PRELOAD OWNER
 		Offset(offset).Limit(limit).
 		Find(&rooms).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không lấy được danh sách room", "error": err.Error()})
@@ -764,7 +759,7 @@ func GetLobbyRooms(c *gin.Context) {
 				"id":     m.NguoiDung.ID,
 				"name":   m.NguoiDung.Ten,
 				"email":  m.NguoiDung.Email,
-				"status": m.TrangThai,
+				"status": m.TrangThai, // sửa từ Status -> TrangThai
 			}
 			members = append(members, member)
 		}
@@ -779,7 +774,7 @@ func GetLobbyRooms(c *gin.Context) {
 				}
 			}
 
-			if !ownerExists && room.NguoiTao.ID > 0 {
+			if !ownerExists {
 				owner := gin.H{
 					"id":     room.NguoiTao.ID,
 					"name":   room.NguoiTao.Ten,
@@ -790,22 +785,14 @@ func GetLobbyRooms(c *gin.Context) {
 			}
 		}
 
-		// ✅ KIỂM TRA CÓ MẬT KHẨU
-		hasPassword := room.MatKhau != nil && *room.MatKhau != ""
-
 		result = append(result, gin.H{
-			"id":               room.ID,
-			"ten_room":         room.TenRoom,
-			"mo_ta":            room.MoTa,
-			"trang_thai":       room.TrangThai,
-			"member_count":     len(members),
-			"members":          members,
-			"is_public":        room.IsPublic,
-			"khoa":             room.Khoa,
-			"mat_khau":         hasPassword, 
-			"require_password": hasPassword, 
-			"nguoi_tao_id":     room.NguoiTaoID,
-			"nguoi_tao_ten":    room.NguoiTao.Ten,
+			"id":           room.ID,
+			"ten_room":     room.TenRoom,
+			"mo_ta":        room.MoTa,
+			"trang_thai":   room.TrangThai,
+			"member_count": len(members),
+			"members":      members,
+			"is_public":    room.IsPublic,
 		})
 	}
 
@@ -818,6 +805,7 @@ func GetLobbyRooms(c *gin.Context) {
 		"totalPages": totalPages,
 	})
 }
+
 // BE22 Tham gia room (enter room)
 func EnterRoom(c *gin.Context) {
 	roomID := c.Param("id")
