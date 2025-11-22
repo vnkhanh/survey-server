@@ -217,13 +217,13 @@ func GetRoomDetail(c *gin.Context) {
 
 		members = append(members, gin.H{
 			"id":            m.ID,
-			"user_id":       m.NguoiDungID, // thêm user_id để FE dễ xử lý
+			"user_id":       m.NguoiDungID,
 			"nguoi_dung_id": m.NguoiDungID,
 			"ten":           memberName,
-			"name":          memberName, // thêm field name cho FE
+			"name":          memberName,
 			"email":         m.NguoiDung.Email,
 			"trang_thai":    m.TrangThai,
-			"status":        m.TrangThai, // thêm field status cho FE
+			"status":        m.TrangThai,
 			"ngay_vao":      m.NgayVao,
 			"ip":            m.IP,
 		})
@@ -246,20 +246,25 @@ func GetRoomDetail(c *gin.Context) {
 		}
 	}
 
+	// KIỂM TRA CÓ MẬT KHẨU KHÔNG
+	hasPassword := room.MatKhau != nil && *room.MatKhau != ""
+
 	c.JSON(http.StatusOK, gin.H{
 		"data": gin.H{
-			"id":            room.ID,
-			"ten_room":      room.TenRoom,
-			"mo_ta":         room.MoTa,
-			"trang_thai":    room.TrangThai,
-			"khoa":          room.Khoa,
-			"share_url":     room.ShareURL,
-			"is_public":     room.IsPublic,
-			"is_locked":     room.IsLocked,
-			"nguoi_tao_id":  room.NguoiTaoID,
-			"nguoi_tao_ten": room.NguoiTao.Ten,   // thêm tên owner riêng
-			"nguoi_tao_email": room.NguoiTao.Email, // thêm email owner riêng
-			"nguoi_tao":     nguoiTaoResponse,
+			"id":               room.ID,
+			"ten_room":         room.TenRoom,
+			"mo_ta":            room.MoTa,
+			"trang_thai":       room.TrangThai,
+			"khoa":             room.Khoa,
+			"share_url":        room.ShareURL,
+			"is_public":        room.IsPublic,
+			"is_locked":        room.IsLocked,
+			"nguoi_tao_id":     room.NguoiTaoID,
+			"nguoi_tao_ten":    room.NguoiTao.Ten,
+			"nguoi_tao_email":  room.NguoiTao.Email,
+			"nguoi_tao":        nguoiTaoResponse,
+			"mat_khau":         hasPassword, 
+			"require_password": hasPassword,
 			"khao_sat": gin.H{
 				"id":          form.ID,
 				"tieu_de":     form.TieuDe,
@@ -270,8 +275,7 @@ func GetRoomDetail(c *gin.Context) {
 			"member_count": len(members) + 1, // +1 cho owner
 		},
 	})
-}
-func UpdateRoom(c *gin.Context) {
+}n.Context) {
 	// roomObj đã được middleware.CheckRoomOwner nạp vào context
 	room := c.MustGet("roomObj").(models.Room)
 
