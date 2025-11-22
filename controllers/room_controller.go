@@ -809,11 +809,36 @@ func EnterRoom(c *gin.Context) {
 	}
 	user := userVal.(models.NguoiDung)
 
-	// Chỉ owner mới vào được nếu room bị khóa
+	// Kiểm tra xem user có phải owner không
 	isOwner := room.NguoiTaoID != nil && *room.NguoiTaoID == user.ID
+
+	// Kiểm tra room locked (chỉ owner mới vào được)
 	if room.IsLocked && !isOwner {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Room đã bị khóa, không thể tham gia"})
 		return
+	}
+
+	// Kiểm tra mật khẩu nếu có (trừ owner)
+	if room.MatKhau != nil && *room.MatKhau != "" && !isOwner {
+		var body struct {
+			Password string `json:"password"`
+		}
+		if err := c.ShouldBindJSON(&body); err != nil || body.Password == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": "Vui lòng nhập mật khẩu",
+				"require_password": true,
+			})
+			return
+		}
+		
+		// Kiểm tra mật khẩu
+		if !utils.CheckPassword(*room.MatKhau, body.Password) {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Sai mật khẩu",
+				"require_password": true,
+			})
+			return
+		}
 	}
 
 	// Kiểm tra user đã là thành viên chưa
@@ -829,6 +854,7 @@ func EnterRoom(c *gin.Context) {
 			TenNguoiDung: user.Ten,
 			TrangThai:    "active",
 			NgayVao:      time.Now(),
+			IP:           c.ClientIP(),
 		}
 		if err := config.DB.Create(&participant).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thêm được thành viên"})
@@ -838,8 +864,11 @@ func EnterRoom(c *gin.Context) {
 		// Lỗi DB thật sự
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi kiểm tra thành viên"})
 		return
+	} else if existing.TrangThai != "active" {
+		// User đã tham gia nhưng không active -> cập nhật lại
+		existing.TrangThai = "active"
+		config.DB.Save(&existing)
 	}
-	// Nếu user đã tồn tại thì không thêm mới -> chỉ tiếp tục trả về danh sách
 
 	// Lấy danh sách thành viên (active)
 	var participants []struct {
