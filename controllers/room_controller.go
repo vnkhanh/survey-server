@@ -18,7 +18,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// BE-12: tạo room
+// BE-12: tạo room - FIXED
 func CreateRoom(c *gin.Context) {
 	u := c.MustGet(middleware.CtxUser).(models.NguoiDung)
 
@@ -27,6 +27,8 @@ func CreateRoom(c *gin.Context) {
 		TenRoom   string  `json:"ten_room" binding:"required"`
 		MoTa      *string `json:"mo_ta"`
 		IsPublic  *bool   `json:"is_public"`
+		MatKhau   *string `json:"mat_khau"`   
+		Khoa      *bool   `json:"khoa"`       
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -66,10 +68,24 @@ func CreateRoom(c *gin.Context) {
 		ShareURL:   shareURL,
 	}
 
+	// XỬ LÝ MẬT KHẨU
+	if req.MatKhau != nil && *req.MatKhau != "" {
+		// Hash mật khẩu
+		hash, err := bcrypt.GenerateFromPassword([]byte(*req.MatKhau), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"message": "Không hash được mật khẩu"})
+			return
+		}
+		pwd := string(hash)
+		room.MatKhau = &pwd
+		room.Khoa = true // Đánh dấu room có mật khẩu
+	}
+
 	if err := config.DB.Create(&room).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không tạo được room"})
 		return
 	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Tạo room thành công",
 		"data":    room,
