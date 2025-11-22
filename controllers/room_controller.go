@@ -178,50 +178,83 @@ func GetRoomDetail(c *gin.Context) {
 		}
 	}
 
-	// Build danh sách thành viên
+	// Build danh sách thành viên (không bao gồm owner)
 	members := make([]gin.H, 0)
+	ownerID := uint(0)
+	if room.NguoiTaoID != nil {
+		ownerID = *room.NguoiTaoID
+	}
+
 	for _, m := range room.Members {
+		// Bỏ qua owner trong danh sách members vì sẽ hiển thị riêng
+		if m.NguoiDungID == ownerID {
+			continue
+		}
+		
+		memberName := m.TenNguoiDung
+		if memberName == "" && m.NguoiDung.Ten != "" {
+			memberName = m.NguoiDung.Ten
+		}
+		if memberName == "" {
+			memberName = "Người dùng"
+		}
+
 		members = append(members, gin.H{
 			"id":            m.ID,
+			"user_id":       m.NguoiDungID, // thêm user_id để FE dễ xử lý
 			"nguoi_dung_id": m.NguoiDungID,
-			"ten": func() string {
-				if m.TenNguoiDung != "" {
-					return m.TenNguoiDung
-				}
-				return m.NguoiDung.Ten
-			}(),
-			"email":      m.NguoiDung.Email,
-			"trang_thai": m.TrangThai,
-			"ngay_vao":   m.NgayVao,
-			"ip":         m.IP,
+			"ten":           memberName,
+			"name":          memberName, // thêm field name cho FE
+			"email":         m.NguoiDung.Email,
+			"trang_thai":    m.TrangThai,
+			"status":        m.TrangThai, // thêm field status cho FE
+			"ngay_vao":      m.NgayVao,
+			"ip":            m.IP,
 		})
+	}
+
+	// Tạo response với nguoi_tao đầy đủ thông tin
+	nguoiTaoResponse := gin.H{
+		"id":    uint(0),
+		"ten":   "",
+		"name":  "",
+		"email": "",
+	}
+
+	if room.NguoiTaoID != nil && room.NguoiTao.ID > 0 {
+		nguoiTaoResponse = gin.H{
+			"id":    room.NguoiTao.ID,
+			"ten":   room.NguoiTao.Ten,
+			"name":  room.NguoiTao.Ten,
+			"email": room.NguoiTao.Email,
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"data": gin.H{
-			"id":         room.ID,
-			"ten_room":   room.TenRoom,
-			"mo_ta":      room.MoTa,
-			"trang_thai": room.TrangThai,
-			"khoa":       room.Khoa,
-			"share_url":  room.ShareURL,
-			"is_public":  room.IsPublic,
-			"nguoi_tao": gin.H{ // thêm block người tạo
-				"id":    room.NguoiTao.ID,
-				"ten":   room.NguoiTao.Ten,
-				"email": room.NguoiTao.Email,
-			},
+			"id":            room.ID,
+			"ten_room":      room.TenRoom,
+			"mo_ta":         room.MoTa,
+			"trang_thai":    room.TrangThai,
+			"khoa":          room.Khoa,
+			"share_url":     room.ShareURL,
+			"is_public":     room.IsPublic,
+			"is_locked":     room.IsLocked,
+			"nguoi_tao_id":  room.NguoiTaoID,
+			"nguoi_tao_ten": room.NguoiTao.Ten,   // thêm tên owner riêng
+			"nguoi_tao_email": room.NguoiTao.Email, // thêm email owner riêng
+			"nguoi_tao":     nguoiTaoResponse,
 			"khao_sat": gin.H{
 				"id":          form.ID,
 				"tieu_de":     form.TieuDe,
 				"mo_ta":       form.MoTa,
 				"public_link": publicLink,
 			},
-			"members": members,
+			"members":      members,
+			"member_count": len(members) + 1, // +1 cho owner
 		},
 	})
 }
-
 func UpdateRoom(c *gin.Context) {
 	// roomObj đã được middleware.CheckRoomOwner nạp vào context
 	room := c.MustGet("roomObj").(models.Room)
@@ -1021,10 +1054,10 @@ func GetRoomParticipants(c *gin.Context) {
 
 	// Hỗ trợ cả ID số và share_url string
 	if id, convErr := strconv.ParseUint(param, 10, 64); convErr == nil && id > 0 {
-		err = config.DB.First(&room, id).Error
+		err = config.DB.Preload("NguoiTao").First(&room, id).Error
 	} else {
 		// Tìm theo share_url
-		err = config.DB.Where("share_url = ?", param).First(&room).Error
+		err = config.DB.Preload("NguoiTao").Where("share_url = ?", param).First(&room).Error
 	}
 
 	if err != nil {
@@ -1050,18 +1083,83 @@ func GetRoomParticipants(c *gin.Context) {
 		}
 	}
 
+	// Lấy danh sách participants với thông tin NguoiDung
 	var participants []models.RoomNguoiThamGia
-	if err := config.DB.Where("room_id = ? AND trang_thai = ?", room.ID, "active").Find(&participants).Error; err != nil {
+	if err := config.DB.
+		Preload("NguoiDung").
+		Where("room_id = ? AND trang_thai = ?", room.ID, "active").
+		Find(&participants).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không lấy được danh sách thành viên"})
 		return
 	}
 
+	// Build response với thông tin đầy đủ
+	result := make([]gin.H, 0)
+	
+	ownerID := uint(0)
+	if room.NguoiTaoID != nil {
+		ownerID = *room.NguoiTaoID
+	}
+
+	// Thêm owner vào đầu danh sách
+	if ownerID > 0 {
+		ownerName := room.NguoiTao.Ten
+		if ownerName == "" {
+			ownerName = "Chủ phòng"
+		}
+		result = append(result, gin.H{
+			"id":             ownerID, // dùng user_id làm id chính
+			"user_id":        ownerID,
+			"nguoi_dung_id":  ownerID,
+			"ten_nguoi_dung": ownerName,
+			"name":           ownerName,
+			"email":          room.NguoiTao.Email,
+			"status":         "owner",
+			"trang_thai":     "owner",
+			"is_owner":       true,
+		})
+	}
+
+	// Thêm các thành viên khác (trừ owner)
+	for _, p := range participants {
+		// Bỏ qua nếu là owner
+		if p.NguoiDungID == ownerID {
+			continue
+		}
+
+		memberName := p.TenNguoiDung
+		if memberName == "" && p.NguoiDung.Ten != "" {
+			memberName = p.NguoiDung.Ten
+		}
+		if memberName == "" {
+			memberName = "Người dùng"
+		}
+
+		result = append(result, gin.H{
+			"id":             p.ID,     // ID của record RoomNguoiThamGia (dùng để xóa)
+			"user_id":        p.NguoiDungID,
+			"nguoi_dung_id":  p.NguoiDungID,
+			"ten_nguoi_dung": memberName,
+			"name":           memberName,
+			"email":          p.NguoiDung.Email,
+			"status":         p.TrangThai,
+			"trang_thai":     p.TrangThai,
+			"is_owner":       false,
+			"ngay_vao":       p.NgayVao,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"room_id":      room.ID,
-		"participants": participants,
+		"owner": gin.H{
+			"id":    ownerID,
+			"name":  room.NguoiTao.Ten,
+			"email": room.NguoiTao.Email,
+		},
+		"participants": result,
+		"total":        len(result),
 	})
 }
-
 // ===== BE-30: Khóa room =====
 func LockRoom(c *gin.Context) {
 	roomID := c.Param("id")
