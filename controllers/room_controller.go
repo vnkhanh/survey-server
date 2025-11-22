@@ -305,20 +305,63 @@ func UpdateRoom(c *gin.Context) {
 	})
 }
 
-// BE-16: xoá room (hard delete - xóa hẳn khỏi DB)
+
+// BE-16: xóa room (hard delete - xóa hẳn khỏi DB)
 func DeleteRoom(c *gin.Context) {
 	// roomObj đã được middleware.CheckRoomOwner nạp vào context
 	room := c.MustGet("roomObj").(models.Room)
 
-	// Xóa trực tiếp trong database
-	if err := config.DB.Delete(&room).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể xóa room"})
+	// Bắt đầu transaction để đảm bảo tính toàn vẹn dữ liệu
+	tx := config.DB.Begin()
+	if tx.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không thể bắt đầu transaction"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Room đã được xóa vĩnh viễn"})
-}
+	// 1. Xóa tất cả thành viên trong room trước
+	if err := tx.Where("room_id = ?", room.ID).Delete(&models.RoomNguoiThamGia{}).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Không thể xóa thành viên trong room",
+			"error":   err.Error(),
+		})
+		return
+	}
 
+	// 2. Xóa tất cả lời mời liên quan đến room
+	if err := tx.Where("room_id = ?", room.ID).Delete(&models.RoomInvite{}).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Không thể xóa lời mời trong room",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// 3. Xóa room
+	if err := tx.Delete(&room).Error; err != nil {
+		tx.Rollback()
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Không thể xóa room",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"message": "Không thể hoàn tất xóa room",
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Room đã được xóa vĩnh viễn",
+		"room_id": room.ID,
+	})
+}
 // BE-16: lưu trữ room
 func ArchiveRoom(c *gin.Context) {
 	// roomObj đã được middleware.CheckRoomOwner nạp vào context
