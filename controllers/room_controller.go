@@ -994,7 +994,16 @@ func DeleteInvite(c *gin.Context) {
 }
 
 // ===== API 22-3: Xóa thành viên khỏi room =====
+// Hỗ trợ xóa theo cả record ID hoặc user_id
 func RemoveMemberFromRoom(c *gin.Context) {
+	// Lấy user hiện tại từ context
+	userVal, exists := c.Get(middleware.CtxUser)
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Chưa đăng nhập"})
+		return
+	}
+	currentUser := userVal.(models.NguoiDung)
+
 	// Lấy roomID và memberID từ param
 	roomID := c.Param("id")
 	memberID := c.Param("memberId")
@@ -1018,9 +1027,27 @@ func RemoveMemberFromRoom(c *gin.Context) {
 		return
 	}
 
-	// Thực hiện xóa dựa trên ID bản ghi RoomNguoiThamGia
+	// Kiểm tra quyền: chỉ owner mới được xóa thành viên
+	if room.NguoiTaoID == nil || *room.NguoiTaoID != currentUser.ID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Chỉ chủ phòng mới có quyền xóa thành viên"})
+		return
+	}
+
+	// Không cho phép xóa chính owner
+	if uint(memberIDUint) == *room.NguoiTaoID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Không thể xóa chủ phòng khỏi room"})
+		return
+	}
+
+	// Thử xóa theo record ID trước
 	result := config.DB.Where("id = ? AND room_id = ?", memberIDUint, roomIDUint).
 		Delete(&models.RoomNguoiThamGia{})
+
+	// Nếu không tìm thấy theo record ID, thử xóa theo user_id
+	if result.RowsAffected == 0 {
+		result = config.DB.Where("nguoi_dung_id = ? AND room_id = ?", memberIDUint, roomIDUint).
+			Delete(&models.RoomNguoiThamGia{})
+	}
 
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không xóa được thành viên"})
@@ -1033,10 +1060,11 @@ func RemoveMemberFromRoom(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Xóa thành viên thành công",
+		"message":    "Xóa thành viên thành công",
+		"room_id":    roomIDUint,
+		"removed_id": memberIDUint,
 	})
 }
-
 // ===== BE-29: Lấy danh sách thành viên trong room =====
 func GetRoomParticipants(c *gin.Context) {
 	param := c.Param("id")
