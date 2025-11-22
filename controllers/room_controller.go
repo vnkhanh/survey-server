@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	
 	"fmt"
 	"net/http"
 	"strconv"
@@ -708,8 +709,7 @@ func EnterRoomByShareURL(c *gin.Context) {
 	})
 }
 
-// BE21 Lấy danh sách room public (lobby)
-// BE: Lấy danh sách room trong lobby (phân trang + tìm kiếm theo tên)
+// BE21 Lấy danh sách room public (lobby) - FIXED
 func GetLobbyRooms(c *gin.Context) {
 	var rooms []models.Room
 
@@ -744,6 +744,7 @@ func GetLobbyRooms(c *gin.Context) {
 
 	// Lấy room (có preload members và NguoiDung)
 	if err := query.Preload("Members.NguoiDung").
+		Preload("NguoiTao"). // THÊM PRELOAD OWNER
 		Offset(offset).Limit(limit).
 		Find(&rooms).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "Không lấy được danh sách room", "error": err.Error()})
@@ -763,7 +764,7 @@ func GetLobbyRooms(c *gin.Context) {
 				"id":     m.NguoiDung.ID,
 				"name":   m.NguoiDung.Ten,
 				"email":  m.NguoiDung.Email,
-				"status": m.TrangThai, // sửa từ Status -> TrangThai
+				"status": m.TrangThai,
 			}
 			members = append(members, member)
 		}
@@ -778,7 +779,7 @@ func GetLobbyRooms(c *gin.Context) {
 				}
 			}
 
-			if !ownerExists {
+			if !ownerExists && room.NguoiTao.ID > 0 {
 				owner := gin.H{
 					"id":     room.NguoiTao.ID,
 					"name":   room.NguoiTao.Ten,
@@ -789,14 +790,22 @@ func GetLobbyRooms(c *gin.Context) {
 			}
 		}
 
+		// ✅ KIỂM TRA CÓ MẬT KHẨU
+		hasPassword := room.MatKhau != nil && *room.MatKhau != ""
+
 		result = append(result, gin.H{
-			"id":           room.ID,
-			"ten_room":     room.TenRoom,
-			"mo_ta":        room.MoTa,
-			"trang_thai":   room.TrangThai,
-			"member_count": len(members),
-			"members":      members,
-			"is_public":    room.IsPublic,
+			"id":               room.ID,
+			"ten_room":         room.TenRoom,
+			"mo_ta":            room.MoTa,
+			"trang_thai":       room.TrangThai,
+			"member_count":     len(members),
+			"members":          members,
+			"is_public":        room.IsPublic,
+			"khoa":             room.Khoa,
+			"mat_khau":         hasPassword, 
+			"require_password": hasPassword, 
+			"nguoi_tao_id":     room.NguoiTaoID,
+			"nguoi_tao_ten":    room.NguoiTao.Ten,
 		})
 	}
 
@@ -809,7 +818,6 @@ func GetLobbyRooms(c *gin.Context) {
 		"totalPages": totalPages,
 	})
 }
-
 // BE22 Tham gia room (enter room)
 func EnterRoom(c *gin.Context) {
 	roomID := c.Param("id")
